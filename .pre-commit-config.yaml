@@ -1,0 +1,22 @@
+repos:
+- repo: local
+  hooks:
+    # Run the formatter.
+    - id: ruff
+      name: ruff
+      description: "Lint and format code using Ruff"
+      entry: make format
+      language: system
+      types_or: [python, pyi]
+      pass_filenames: false
+
+# Mandatory internal hooks
+- repo: https://github.com/uktrade/github-standards
+  rev: v1.1.2  # update periodically with pre-commit autoupdate
+  hooks:
+    - id: run-security-scan
+      verbose: false
+    - id: run-personal-data-scan
+      verbose: false
+    - id: validate-security-scan
+      verbose: false
