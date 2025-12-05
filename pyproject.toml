@@ -29,8 +29,6 @@ dev = [
     "pytest-cov",
     "ruff",
     "pre-commit",
-    "Faker",
-    "scikit-learn"
 ]
 
 [build-system]
