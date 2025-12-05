@@ -45,8 +45,7 @@
     - Uncommon or non-Western naming conventions may be missed or misclassified.
 
 > [!IMPORTANT]
-> * See [this notebook](notebooks/evaluation.ipynb) and [our wiki](https://github.com/uktrade/idscrub/wiki/Evaluation) for further details and notes on our evaluation of `idscrub`.
-> * Any resemblance to real persons in the dummy evaluation datasets are purely coincidental. 
+> * See [our wiki](https://github.com/uktrade/idscrub/wiki/Evaluation) for further details and notes on our evaluation of `idscrub`.
 
 ### Models and Memory
 
