@@ -2,7 +2,7 @@
 
 ## Project Info
 
-* This package removes (*✨scrubs✨*) identifying personally identfying information (PII) from text using [regular expressions](https://en.wikipedia.org/wiki/Regular_expression) and [named-entity recognition](https://en.wikipedia.org/wiki/Named-entity_recognition).
+* This package removes (*✨scrubs✨*) identifying personal data from text using [regular expressions](https://en.wikipedia.org/wiki/Regular_expression) and [named-entity recognition](https://en.wikipedia.org/wiki/Named-entity_recognition).
 
 > [!WARNING]
 > You must follow [GDPR guidance](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/the-research-provisions/principles-and-grounds-for-processing/) when processing personal data using this package.
@@ -25,7 +25,7 @@
 * A list of text with names and other identifying information removed.
 
 > [!WARNING]
-> * This package has been designed as a *first pass* for standardised PII-removal. 
+> * This package has been designed as a *first pass* for standardised personal data removal. 
 > * Users are encouraged to check and confirm outputs and conduct manual reviews where necessary, e.g. when cleaning high risk datasets.
 > * It is up to the user to assess whether this removal process needs to be supplemented by other methods for their given dataset and security requirements.
 
