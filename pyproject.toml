@@ -1,6 +1,6 @@
 [project]
 name = "idscrub"
-version = "0.1.0"
+dynamic = ["version"]
 authors = [{ name="Department for Business and Trade" }]
 license-files = ["LICENSE"]
 readme = "README.md"
