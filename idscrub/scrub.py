@@ -19,7 +19,7 @@ from tqdm import tqdm
 from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
 from transformers.utils import logging as trf_logging
 
-from idscrub.locations import DOWNLOAD_DIR, PROJECT_DIR
+from idscrub.locations import DOWNLOAD_DIR
 
 # Suppress Torch FutureWarning
 # TODO: Find better way
@@ -883,6 +883,7 @@ class IDScrub:
     def dataframe(
         df: pd.DataFrame = None,
         id_col: str = None,
+        exclude_cols: list[str] = None,
         scrub_methods: list[str] = ["all"],
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -891,6 +892,7 @@ class IDScrub:
         Args:
             df (pd.DataFrame): A Pandas dataframe to scrub.
             id_col (str): Name of the ID column in `df`. If None, an integer index starting at 1  with the name `id` is applied.
+            exclude_cols (list): Columns to exclude from scrubbing. if None all columns are scrubbed.
             scrub_methods (list[str]): Which scrub methods to apply to the DataFrame (in order).
             These are string versions of the existing methods e.g. "all" == scrub.all() and "email_addresses" == scrub.email_addresses().
 
@@ -898,6 +900,8 @@ class IDScrub:
             tuple[pd.DataFrame, pd.DataFrame]: The input dataframe with all personal data removed and a dataframe with the personal data that has been removed.
 
         """
+
+        assert id_col in df.columns, "`id_col` is not a column in `df`. Please check."
 
         if id_col:
             ids = df[id_col].to_list()
@@ -908,14 +912,18 @@ class IDScrub:
         assert isinstance(df, pd.DataFrame), "`df` must be a Pandas DataFrame."
         assert len(df) == len(ids), "Length of dataframe is different to the length of IDs."
 
+        if exclude_cols is None:
+            cols_to_scrub = df.columns.to_list()
+        else:
+            cols_to_scrub = [col for col in df.columns if col not in exclude_cols]
+
+        cols_to_scrub.remove(id_col)
+
         scrubbed_df = df.copy()
 
         all_scrubbed_data = []
 
-        for col in tqdm(scrubbed_df.columns):
-            if col == id_col:
-                continue
-
+        for col in tqdm(cols_to_scrub):
             original_dtype = scrubbed_df[col].dtype
             scrubbed_df[col] = scrubbed_df[col].astype(str)
 
@@ -943,5 +951,7 @@ class IDScrub:
 
         all_scrubbed_data = pd.concat(all_scrubbed_data).reset_index(drop=True)
         all_scrubbed_data = all_scrubbed_data.where(pd.notna(all_scrubbed_data), None)
+
+        assert df.shape == scrubbed_df.shape, "Original and scrubbed dataframe not the same shape. Check."
 
         return scrubbed_df, all_scrubbed_data

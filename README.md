@@ -64,15 +64,15 @@
 
 ## Installation
 
-`idscrub` can be installed using `pip` into a Python **>=3.12** environment. Example (with spaCy model installed):
+`idscrub` can be installed using `pip` into a Python **>=3.12** environment. Example:
 
 ```console
-pip install 'git+ssh://git@github.com/uktrade/idscrub.git#egg=idscrub[trf]'
+pip install idscrub
 ```
-or without spaCy installed (it will be installed automatically if name cleaning methods are called):
+or with the spaCy transformer model (`en_core_web_trf`) already installed:
 
 ```console
-pip install 'git+ssh://git@github.com/uktrade/idscrub.git'
+pip instll idscrub[trf]
 ```
 
 ## How to use the code
