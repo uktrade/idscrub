@@ -1,6 +1,6 @@
 # idscrub 🧽✨
 
-## Project Info
+## Project Information
 
 * This package removes (*✨scrubs✨*) identifying personal data from text using [regular expressions](https://en.wikipedia.org/wiki/Regular_expression) and [named-entity recognition](https://en.wikipedia.org/wiki/Named-entity_recognition).
 
