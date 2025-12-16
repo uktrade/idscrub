@@ -82,12 +82,12 @@ Basic usage example (see `notebooks/basic_usage.ipynb` for further examples):
 ```python
 from idscrub import IDScrub
 
-scrub = IDScrub(['Our names are Hamish McDonald, L. Salah, and Elena Suárez.', 'My number is +441111111111 and I live at AA11 1AA, Lapland.'])
-scrubbed_texts = scrub.all()
+scrub = IDScrub(['Our names are Hamish McDonald, L. Salah, and Elena Suárez.', 'My number is +441111111111 and I live at AA11 1AA.'])
+scrubbed_texts = scrub.scrub(scrub_methods=['spacy_persons', 'uk_phone_numbers', 'uk_postcodes'])
 
 print(scrubbed_texts)
 
-# Output: ['Our names are [PERSON], [PERSON], and [PERSON].', 'My number is [PHONENO] and I live at [POSTCODE], [LOCATION].']
+# Output: ['Our names are [PERSON], [PERSON], and [PERSON].', 'My number is [PHONENO] and I live at [POSTCODE].']
 ```
 
 ## AI Declaration
