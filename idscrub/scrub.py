@@ -879,6 +879,41 @@ class IDScrub:
 
         return scrub_methods.get(scrub_method, lambda: "Unknown method.")()
 
+    def scrub(self, scrub_methods: list[str] = ["all"]) -> list[str]:
+        """
+        Scrubs text using given methods (in order).
+        Uses default values for the given scrub method.
+
+        Methods available (see associated method docstring for further information):
+
+        "all", "spacy_persons", "huggingface_persons", "email_addresses", "handles",
+        "ip_addresses", "uk_phone_numbers", "google_phone_numbers", "uk_postcodes"
+        "titles", "presidio"
+
+        Example:
+
+        "email_addresses" = scrub.email_addresses()
+
+        Therefore we can call:
+
+        IDScrub.scrub(scrub_methods = ["email_addresses"])
+
+        Args:
+            scrub_method (str): string name of scrub method.
+
+        Returns:
+            list[str]: The input list of text with personal information replaced.
+
+        """
+
+        for i, scrub_method in enumerate(scrub_methods):
+            if i == len(scrub_methods) - 1:
+                self.call_scrub_method(scrub_method)
+            else:
+                self.call_scrub_method(scrub_method)
+
+        return self.cleaned_texts
+
     @staticmethod
     def dataframe(
         df: pd.DataFrame = None,
