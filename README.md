@@ -66,10 +66,10 @@ print(scrubbed_texts)
 * Similar packages exist for undertaking this task, such as [Presidio](https://microsoft.github.io/presidio/), [Scrubadub](https://github.com/LeapBeyond/scrubadub) and [Sanityze](https://github.com/UBC-MDS/sanityze). 
 * Development of `idscrub` was undertaken to: 
 
-    * Bring together different scrubbing methods across the Department for Business and Trade
-    * Adhere to infrastructure requirements
-    * Guarantee future stability and maintainability
-    * Encourage future scrubbing methods to be added collaboratively and transparently
+    * Bring together different scrubbing methods across the Department for Business and Trade.
+    * Adhere to infrastructure requirements.
+    * Guarantee future stability and maintainability.
+    * Encourage future scrubbing methods to be added collaboratively and transparently.
     * Allow for full flexibility depending on the use case and required outputs.
     
 * To leverage the power of other packages, we have added methods that allow you to interact with them. These include: `IDScrub.presidio()` and `IDScrub.google_phone_numbers()`. See the [usage example notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/basic_usage.ipynb) and method docstrings for further information.
