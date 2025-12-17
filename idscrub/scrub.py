@@ -906,11 +906,8 @@ class IDScrub:
 
         """
 
-        for i, scrub_method in enumerate(scrub_methods):
-            if i == len(scrub_methods) - 1:
-                self.call_scrub_method(scrub_method)
-            else:
-                self.call_scrub_method(scrub_method)
+        for scrub_method in scrub_methods:
+            self.call_scrub_method(scrub_method)
 
         return self.cleaned_texts
 
