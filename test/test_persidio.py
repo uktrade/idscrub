@@ -36,8 +36,8 @@ def test_persidio_get_data():
     expected_df = pd.DataFrame(
         {
             "text_id": {0: 1, 1: 2},
-            "scrubbed_presidio_person": {0: ["Hamish McDonald", "L. Salah", "Elena Suárez"], 1: None},
-            "scrubbed_presidio_iban_code": {0: None, 1: ["GB91BKEN10000041610008"]},
+            "person": {0: ["Hamish McDonald", "L. Salah", "Elena Suárez"], 1: None},
+            "iban_code": {0: None, 1: ["GB91BKEN10000041610008"]},
         }
     )
 

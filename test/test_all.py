@@ -30,9 +30,9 @@ def test_get_scrubbed_data(scrub_object):
     expected_df = pd.DataFrame(
         {
             "text_id": {0: 1, 1: 2},
-            "scrubbed_presidio_person": {0: ["Hamish McDonald", "L. Salah", "Elena Suárez"], 1: None},
-            "scrubbed_uk_phone_numbers": {0: None, 1: ["+441111111111"]},
-            "scrubbed_uk_postcodes": {0: None, 1: ["AA11 1AA"]},
+            "person": {0: ["Hamish McDonald", "L. Salah", "Elena Suárez"], 1: None},
+            "uk_phone_number": {0: None, 1: ["+441111111111"]},
+            "uk_postcode": {0: None, 1: ["AA11 1AA"]},
         }
     )
 

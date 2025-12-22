@@ -22,8 +22,8 @@ def test_chain_order(scrub_object):
         "My number is [PHONENO] and I live at AA11 1AA.",
     ]
 
-    assert scrub_object.get_scrubbed_data()["scrubbed_uk_phone_numbers"].to_list() == [["+441111111111"]]
-    assert "scrubbed_uk_postcodes" not in scrub_object.get_scrubbed_data().columns
+    assert scrub_object.get_scrubbed_data()["uk_phone_number"].to_list() == [["+441111111111"]]
+    assert "uk_postcode" not in scrub_object.get_scrubbed_data().columns
 
     scrubbed = scrub_object.uk_postcodes()
 
@@ -31,8 +31,8 @@ def test_chain_order(scrub_object):
         "Our names are Hamish McDonald, L. Salah, and Elena Suárez.",
         "My number is [PHONENO] and I live at [POSTCODE].",
     ]
-    assert scrub_object.get_scrubbed_data()["scrubbed_uk_phone_numbers"].to_list() == [["+441111111111"]]
-    assert scrub_object.get_scrubbed_data()["scrubbed_uk_postcodes"].to_list() == [["AA11 1AA"]]
+    assert scrub_object.get_scrubbed_data()["uk_phone_number"].to_list() == [["+441111111111"]]
+    assert scrub_object.get_scrubbed_data()["uk_postcode"].to_list() == [["AA11 1AA"]]
 
 
 def test_get_scrubbed_data_chain(scrub_object):
@@ -45,9 +45,9 @@ def test_get_scrubbed_data_chain(scrub_object):
     expected_df = pd.DataFrame(
         {
             "text_id": {0: 1, 1: 2},
-            "scrubbed_uk_phone_numbers": {0: None, 1: ["+441111111111"]},
-            "scrubbed_uk_postcodes": {0: None, 1: ["AA11 1AA"]},
-            "scrubbed_spacy_person": {0: ["Hamish McDonald", "L. Salah", "Elena Suárez"], 1: None},
+            "uk_phone_number": {0: None, 1: ["+441111111111"]},
+            "uk_postcode": {0: None, 1: ["AA11 1AA"]},
+            "person": {0: ["Hamish McDonald", "L. Salah", "Elena Suárez"], 1: None},
         }
     )
 
