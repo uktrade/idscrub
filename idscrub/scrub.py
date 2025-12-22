@@ -138,52 +138,51 @@ class IDScrub:
 
         return grouped
 
-    def log_message(self, removed_label) -> None:
+    def log_message(self, label) -> None:
         """
         Log message with count of PII-type scrubbed.
 
         Args:
-            removed_label (str): Label for the PII-type removed. Must be prefixed with `scrubbed_`.
+            label (str): Label for the personal data removed.
         Returns:
             int: The count of PII-type scrubbed.
         """
 
-        if any(removed_label in key for key in self.scrubbed_data):
+        if any(label in key for key in self.scrubbed_data):
             scrubbed_data = self.get_scrubbed_data()
-            count = scrubbed_data[removed_label].dropna().apply(len).sum()
+            count = scrubbed_data[label].dropna().apply(len).sum()
         else:
             count = 0
 
-        label_name = removed_label.removeprefix("scrubbed_").replace("_", " ")
-        self.logger.info(f"{count} {label_name} scrubbed.")
+        self.logger.info(f"{count} {label} scrubbed.")
 
         return count
 
-    def scrub_and_collect(self, match, text, replacement_text, i, removed_label) -> str:
+    def scrub_and_collect(self, match, text, replacement_text, i, label) -> str:
         """
         Scrub pattern match and collect scrubbed name.
 
         Args:
             match (str): The regex match passed from `re.sub()`.
             i (int): the enumerate id of the string.
-            removed_label (str): Label for the PII-type removed. Must be prefixed with `scrubbed_`.
+            label (str): Label for the personal data removed.
 
         Returns:
             str: The replacement text.
         """
 
-        self.scrubbed_data.append({self.text_id_name: i, removed_label: match.group()})
+        self.scrubbed_data.append({self.text_id_name: i, label: match.group()})
 
         return replacement_text
 
-    def scrub_regex(self, pattern, replacement_text, removed_label) -> list[str]:
+    def scrub_regex(self, pattern, replacement_text, label) -> list[str]:
         """
         General method to clean text using a regex pattern.
 
         Args:
             pattern (str): Regex pattern to apply.
             replacement_text (str): The replacement text for the removed text.
-            removed_label (str): Label for the PII-type removed. Must be prefixed with `scrubbed_`.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: Cleaned texts.
@@ -203,7 +202,7 @@ class IDScrub:
                     text=text,
                     replacement_text=replacement_text,
                     i=i,
-                    removed_label=removed_label,
+                    label=label,
                 ),
                 text,
             )
@@ -212,7 +211,7 @@ class IDScrub:
 
         self.cleaned_texts = cleaned_texts
 
-        self.log_message(removed_label)
+        self.log_message(label)
 
         return cleaned_texts
 
@@ -220,6 +219,7 @@ class IDScrub:
         self,
         custom_regex_patterns: list[str] = None,
         custom_replacement_texts: list[str] = None,
+        labels: list[str] = None,
     ) -> list[str]:
         """
         Remove text matching a custom regex pattern.
@@ -228,6 +228,7 @@ class IDScrub:
             custom_regex_patterns list[str]: Regex(s) pattern to apply.
             custom_replacement_texts list[str]: The replacement texts for the removed text.
             Defaults to '[REDACTED]' for all.
+            labels list[str]: Labels for patterns removed.
 
         Returns:
             list[str]: Cleaned texts.
@@ -243,17 +244,22 @@ class IDScrub:
             custom_replacement_texts = ["[REDACTED]"] * len(custom_regex_patterns)
 
         for i, (pattern, replacement_text) in enumerate(zip(custom_regex_patterns, custom_replacement_texts)):
-            self.scrub_regex(pattern, replacement_text, removed_label=f"scrubbed_custom_regex_{i + 1}")
+            if labels:
+                assert len(custom_regex_patterns) == len(labels), "There must be a label for each pattern."
+                self.scrub_regex(pattern, replacement_text, label=f"{labels[i]}")
+            else:
+                self.scrub_regex(pattern, replacement_text, label=f"custom_regex_{i + 1}")
 
         return self.cleaned_texts
 
-    def email_addresses(self, replacement_text="[EMAIL_ADDRESS]") -> list[str]:
+    def email_addresses(self, replacement_text: str = "[EMAIL_ADDRESS]", label: str = "email_address") -> list[str]:
         """
         Remove email addresses using regex.
         e.g. `johnsmith@gmail.com` scrubbed
 
         Args:
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with email addresses replaced.
@@ -262,15 +268,16 @@ class IDScrub:
         self.logger.info("Scrubbing email addresses using regex...")
         pattern = r"\b\S+@\S+\.\S+\b"
 
-        return self.scrub_regex(pattern, replacement_text, removed_label="scrubbed_email_addresses")
+        return self.scrub_regex(pattern, replacement_text, label=label)
 
-    def handles(self, replacement_text: str = "[HANDLE]") -> list[str]:
+    def handles(self, replacement_text: str = "[HANDLE]", label: str = "handle") -> list[str]:
         """
         Remove `@` user handles using regex
         e.g. `@username` scrubbed
 
         Args:
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with handles replaced.
@@ -279,9 +286,11 @@ class IDScrub:
         self.logger.info("Scrubbing @user handles using regex...")
         pattern = r"@[\w.-]+(?=\b)"
 
-        return self.scrub_regex(pattern, replacement_text, removed_label="scrubbed_handles")
+        return self.scrub_regex(pattern, replacement_text, label=label)
 
-    def google_phone_numbers(self, region: str = "GB", replacement_text: str = "[PHONENO]") -> list[str]:
+    def google_phone_numbers(
+        self, region: str = "GB", replacement_text: str = "[PHONENO]", label: str = "phone_number"
+    ) -> list[str]:
         """
         Remove phone numbers using Google's `phonenumbers`.
         e.g. `+441234567891` scrubbed
@@ -289,6 +298,7 @@ class IDScrub:
         Args:
             region (str): The region to find phone numbers for. See `phonenumbers` regions.
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with phone numbers replaced.
@@ -308,7 +318,7 @@ class IDScrub:
             phone_nos = [match.raw_string for match in matches]
 
             for phone_no in phone_nos:
-                self.scrubbed_data.append({self.text_id_name: i, "scrubbed_phone_numbers": phone_no})
+                self.scrubbed_data.append({self.text_id_name: i, label: phone_no})
 
             cleaned = text
             for match in reversed(matches):
@@ -318,17 +328,18 @@ class IDScrub:
 
         self.cleaned_texts = cleaned_texts
 
-        self.log_message(f"scrubbed_{region.lower()}_phone_numbers")
+        self.log_message(label)
 
         return cleaned_texts
 
-    def uk_phone_numbers(self, replacement_text: str = "[PHONENO]") -> list[str]:
+    def uk_phone_numbers(self, replacement_text: str = "[PHONENO]", label: str = "uk_phone_number") -> list[str]:
         """
         Remove phone numbers using regex.
         e.g. `+441234567891` scrubbed
 
         Args:
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with phone numbers replaced.
@@ -337,9 +348,9 @@ class IDScrub:
         self.logger.info("Scrubbing phone numbers using regex...")
         pattern = r"(\+?\d[\d\s]{7,}\d)"
 
-        return self.scrub_regex(pattern, replacement_text, removed_label="scrubbed_uk_phone_numbers")
+        return self.scrub_regex(pattern, replacement_text, label=label)
 
-    def titles(self, strict: bool = False, replacement_text: str = "[TITLE]") -> list[str]:
+    def titles(self, strict: bool = False, replacement_text: str = "[TITLE]", label: str = "title") -> list[str]:
         """
         Remove titles using regex.
 
@@ -347,6 +358,7 @@ class IDScrub:
             strict (bool): Whether to use all of the titles or only essential titles.
             If strict, you may find scrubbing of common words, such as general.
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with names after titles replaced.
@@ -394,7 +406,7 @@ class IDScrub:
         ]
 
         if not strict:
-            titles_to_remove = ["General", "Major", "Judge", "Master", "Father", "Sister"]
+            titles_to_remove = ["General", "Major", "Judge", "Master", "Father", "Sister", "Miss"]
             titles = [title for title in titles if title not in titles_to_remove]
 
         # Add dotted versions
@@ -404,9 +416,9 @@ class IDScrub:
         self.logger.info("Scrubbing titles using regex...")
         pattern = r"\b(?:{})\b".format("|".join(re.escape(t) for t in titles))
 
-        return self.scrub_regex(pattern, replacement_text, removed_label="scrubbed_titles")
+        return self.scrub_regex(pattern, replacement_text, label=label)
 
-    def ip_addresses(self, replacement_text: str = "[IPADDRESS]") -> list[str]:
+    def ip_addresses(self, replacement_text: str = "[IPADDRESS]", label: str = "ip_address") -> list[str]:
         """
         Removes IP addresses.
         e.g. `192.168.1.1` scrubbed
@@ -421,26 +433,27 @@ class IDScrub:
         self.logger.info("Scrubbing IP addresses using regex...")
         pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
 
-        return self.scrub_regex(pattern, replacement_text, removed_label="scrubbed_ip_addresses")
+        return self.scrub_regex(pattern, replacement_text, label=label)
 
-    def uk_postcodes(self, replacement_text: str = "[POSTCODE]") -> list[str]:
+    def uk_postcodes(self, replacement_text: str = "[POSTCODE]", label: str = "uk_postcode") -> list[str]:
         """
-        Removes UK postcodes.
+        Removes postcodes.
         e.g. `A11 1AA` scrubbed
 
         Args:
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with postcodes replaced.
         """
 
-        self.logger.info("Scrubbing UK postcodes using regex...")
+        self.logger.info("Scrubbing postcodes using regex...")
         pattern = r"\b(?:(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]?)[ \t]*[0-9][A-Z]{2}|GIR[ \t]*0A{2}|SAN[ \t]*TA1|ASCN[ \t]*1ZZ|STHL[ \t]*1ZZ|TDCU[ \t]*1ZZ|BBND[ \t]*1ZZ|[BFS]IQ{2}[ \t]*1ZZ|GX11[ \t]*1AA|PCRN[ \t]*1ZZ|TKCA[ \t]*1ZZ|AI-?[0-9]{4}|BFPO[ \t-]?[0-9]{2,4}|MSR[ \t-]?1(?:1[12]|[23][135])0|VG[ \t-]?11[1-6]0|KY[1-3][ \t-]?[0-2][0-9]{3})\b"
 
-        return self.scrub_regex(pattern, replacement_text, removed_label="scrubbed_uk_postcodes")
+        return self.scrub_regex(pattern, replacement_text, label=label)
 
-    def claimants(self, replacement_text="[CLAIMANT]") -> list[str]:
+    def claimants(self, replacement_text="[CLAIMANT]", label: str = "claimant") -> list[str]:
         """
         Removes claimant names from employment tribunal texts.
         e.g. `Claimant: Jim Smith` scrubbed
@@ -472,9 +485,7 @@ class IDScrub:
 
             if claimant_name:
                 cleaned = re.sub(re.escape(claimant_name), replacement_text, cleaned)
-                self.scrubbed_data.append({self.text_id_name: i, "scrubbed_claimants": claimant_name})
-                # self.scrubbed_data[self.text_id_name].append(i)
-                # self.scrubbed_data['scrubbed_claimant'].append(claimant_name)
+                self.scrubbed_data.append({self.text_id_name: i, label: claimant_name})
 
             cleaned_texts.append(cleaned)
 
@@ -523,6 +534,7 @@ class IDScrub:
         n_process: int = 1,
         batch_size: int = 1000,
         replacement_text: str = "[PERSON]",
+        label: str = "person",
     ) -> list[str]:
         """
         Remove PERSON entities using a Spacy model.
@@ -533,6 +545,7 @@ class IDScrub:
             n_process (int): Number of parallel processes.
             batch_size (int): The number of texts in each batch.
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with PERSON entities scrubbed.
@@ -561,9 +574,7 @@ class IDScrub:
             person_entities = [
                 ent for ent in doc.ents if ent.label_ == "PERSON" and ent.text not in {"PERSON", "HANDLE"}
             ]
-            self.scrubbed_data.extend(
-                {self.text_id_name: ids, "scrubbed_spacy_person": ent.text} for ent in person_entities
-            )
+            self.scrubbed_data.extend({self.text_id_name: ids, label: ent.text} for ent in person_entities)
 
             # Remove person entities
             cleaned = stripped_text
@@ -574,7 +585,7 @@ class IDScrub:
 
         self.cleaned_texts = cleaned_texts
 
-        self.log_message("scrubbed_spacy_person")
+        self.log_message(label)
 
         return cleaned_texts
 
@@ -618,6 +629,7 @@ class IDScrub:
         hf_model_path: str = "dbmdz/bert-large-cased-finetuned-conll03-english",
         download_directory: str = f"{DOWNLOAD_DIR}/huggingface/",
         replacement_text: str = "[PERSON]",
+        label: str = "person",
         batch_size: int = 8,
     ) -> list[str]:
         """
@@ -630,6 +642,7 @@ class IDScrub:
             download_directory (str): Directory in which to save the model.
             Default is current working directory.
             replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
             batch_size (int): Number of texts passed to the model in each batch.
             Memory (instance size) dependent.
 
@@ -668,9 +681,7 @@ class IDScrub:
             person_entities = [
                 ent for ent in entities if ent["entity_group"] == "PER" and ent["word"] not in {"HANDLE", "PERSON"}
             ]
-            self.scrubbed_data.extend(
-                {self.text_id_name: ids, "scrubbed_hf_person": ent["word"]} for ent in person_entities
-            )
+            self.scrubbed_data.extend({self.text_id_name: ids, label: ent["word"]} for ent in person_entities)
 
             cleaned = stripped_text
             for ent in sorted(person_entities, key=lambda x: x["start"], reverse=True):
@@ -680,14 +691,14 @@ class IDScrub:
 
         self.cleaned_texts = cleaned_texts
 
-        self.log_message("scrubbed_hf_person")
+        self.log_message(label)
 
         return cleaned_texts
 
     def presidio(
         self,
-        model_name="en_core_web_trf",
-        entities_to_scrub=[
+        model_name: str = "en_core_web_trf",
+        entities_to_scrub: list[str] = [
             "PERSON",
             "UK_NINO",
             "UK_NHS",
@@ -697,7 +708,8 @@ class IDScrub:
             "URL",
             "IBAN_CODE",
         ],
-        replacement_map=None,
+        replacement_map: str = None,
+        label_prefix: str = None,
     ) -> list[str]:
         """
         Scrub specified entities from texts using Presidio.
@@ -708,6 +720,7 @@ class IDScrub:
             model_name (str): spaCy model to use
             entities_to_scrub (list[str]): Entity types to scrub (e.g. ["PERSON", "IP_ADDRESS"])
             replacement_map (dict): Mapping of entity_type to replacement string (e.g. {'PERSON': '[PERSON]'})
+            label_prefix (str): Prefix for the Presidio personal data type removed, e.g. `{label}_person`.
 
         Returns:
             list[str]: The input list of text with entities replaced.
@@ -743,7 +756,11 @@ class IDScrub:
             results = analyzer.analyze(text=stripped_text, language="en")
             results = [r for r in results if r.entity_type in entities_to_scrub]
 
-            labels = [f"scrubbed_presidio_{res.entity_type.lower()}" for res in results]
+            if label_prefix:
+                labels = [f"{label_prefix}_{res.entity_type.lower()}" for res in results]
+            else:
+                labels = [f"{res.entity_type.lower()}" for res in results]
+
             unique_labels.append(list(set(labels)))
 
             self.scrubbed_data.extend(
@@ -847,38 +864,6 @@ class IDScrub:
 
         return self.cleaned_texts
 
-    def call_scrub_method(self, scrub_method: str) -> list[str]:
-        """
-        Calls a given scrub method based on its matching string name.
-        Uses default values for the given scrub method.
-
-        Example:
-        "all" == scrub.all() and "email_addresses" == scrub.email_addresses().
-
-        Args:
-            scrub_method (str): string name of scrub method.
-
-        Returns:
-             list[str]: The input list of text with personal information replaced.
-
-        """
-
-        scrub_methods = {
-            "all": self.all,
-            "spacy_persons": self.spacy_persons,
-            "huggingface_persons": self.huggingface_persons,
-            "email_addresses": self.email_addresses,
-            "handles": self.handles,
-            "ip_addresses": self.ip_addresses,
-            "uk_phone_numbers": self.uk_phone_numbers,
-            "google_phone_numbers": self.google_phone_numbers,
-            "uk_postcodes": self.uk_postcodes,
-            "titles": self.titles,
-            "presidio": self.presidio,
-        }
-
-        return scrub_methods.get(scrub_method, lambda: "Unknown method.")()
-
     def scrub(self, scrub_methods: list[str] = ["all"]) -> list[str]:
         """
         Scrubs text using given methods (in order).
@@ -907,7 +892,11 @@ class IDScrub:
         """
 
         for scrub_method in scrub_methods:
-            self.call_scrub_method(scrub_method)
+            try:
+                method = getattr(self, scrub_method)
+                method()
+            except AttributeError:
+                self.logger.warning("Not a scrub method.")
 
         return self.cleaned_texts
 
@@ -915,7 +904,7 @@ class IDScrub:
     def dataframe(
         df: pd.DataFrame = None,
         id_col: str = None,
-        exclude_cols: list[str] = None,
+        exclude_cols: list = None,
         scrub_methods: list[str] = ["all"],
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -960,13 +949,9 @@ class IDScrub:
             scrubbed_df[col] = scrubbed_df[col].astype(str)
 
             scrub = IDScrub(texts=scrubbed_df[col].to_list(), text_id_name=id_col, text_ids=ids)
+            scrub.logger.info(f"Scrubbing column `{col}`...")
 
-            for i, scrub_method in enumerate(scrub_methods):
-                if i == len(scrub_methods) - 1:
-                    scrubbed_texts = scrub.call_scrub_method(scrub_method)
-                else:
-                    scrub.call_scrub_method(scrub_method)
-
+            scrubbed_texts = scrub.scrub(scrub_methods)
             scrubbed_df[col] = scrubbed_texts
 
             scrubbed_data = scrub.get_scrubbed_data()

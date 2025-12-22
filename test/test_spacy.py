@@ -23,6 +23,4 @@ def test_spacy_empty():
     scrubbed = scrub.spacy_persons()
 
     assert scrubbed == [" ", "[PERSON]", ""]
-    assert_frame_equal(
-        scrub.get_scrubbed_data(), pd.DataFrame({"text_id": 2, "scrubbed_spacy_person": [["John Smith"]]})
-    )
+    assert_frame_equal(scrub.get_scrubbed_data(), pd.DataFrame({"text_id": 2, "person": [["John Smith"]]}))

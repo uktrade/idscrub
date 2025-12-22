@@ -22,4 +22,4 @@ def test_huggingface_empty():
     scrubbed = scrub.huggingface_persons()
 
     assert scrubbed == [" ", "[PERSON]", ""]
-    assert_frame_equal(scrub.get_scrubbed_data(), pd.DataFrame({"text_id": 2, "scrubbed_hf_person": [["John Smith"]]}))
+    assert_frame_equal(scrub.get_scrubbed_data(), pd.DataFrame({"text_id": 2, "person": [["John Smith"]]}))

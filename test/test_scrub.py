@@ -30,7 +30,7 @@ def test_scrub_get_scrubbed_data(scrub_object):
     expected_df = pd.DataFrame(
         {
             "text_id": {0: 2},
-            "scrubbed_uk_postcodes": {0: ["AA11 1AA"]},
+            "uk_postcode": {0: ["AA11 1AA"]},
         }
     )
 
@@ -42,7 +42,7 @@ def test_scrub_order(scrub_object):
 
     assert scrub_object.get_scrubbed_data().columns.to_list() == [
         "text_id",
-        "scrubbed_uk_postcodes",
-        "scrubbed_uk_phone_numbers",
-        "scrubbed_spacy_person",
+        "uk_postcode",
+        "uk_phone_number",
+        "person",
     ]
