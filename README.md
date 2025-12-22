@@ -32,7 +32,7 @@ print(scrubbed_texts)
 ```
 ## Personal data types supported
 
-These personal data types can either be scrubbed as methods with arguments for extra customisation, e.g. `IDScrub.google_phone_numbers(region="GB")`, or as string arguments with default configurations (see above).
+Personal data can either be scrubbed as methods with arguments for extra customisation, e.g. `IDScrub.google_phone_numbers(region="GB")`, or as a string arguments with default configurations (see above). The method name and its string representation are the same. 
 
 | Argument                | Scrubs                                                                 |
 |-------------------------|------------------------------------------------------------------------|
