@@ -30,6 +30,23 @@ print(scrubbed_texts)
 
 # Output: ['Our names are [PERSON], [PERSON], and [PERSON].', 'My number is [PHONENO] and I live at [POSTCODE].']
 ```
+## Personal data types supported
+
+These personal data types can either be scrubbed as methods with arguments for extra customisation, e.g. `IDScrub.google_phone_numbers(region="GB")`, or as string arguments with default configurations (see above).
+
+| Argument                | Scrubs                                                                 |
+|-------------------------|------------------------------------------------------------------------|
+| `all`                  | All supported personal data types (see `IDScrub.all()` for further customisation)                                      |
+| `spacy_persons`        | Person names detected by spaCy's `en_core_web_trf` (or other user-selected spaCy models)                                    |
+| `huggingface_persons`  | Person names detected by user-selected HuggingFace models                        |
+| `email_addresses`      | Email addresses                                                       |
+| `titles`               | Titles (e.g., Mr., Mrs., Dr.)                                         |
+| `handles`              | Social media handles (e.g., @username)                                |
+| `ip_addresses`         | IP addresses                                                          |
+| `uk_postcodes`         | UK postal codes                                                       |
+| `uk_phone_numbers`     | UK phone numbers                                                      |
+| `google_phone_numbers` | Phone numbers detected by Google’s [phonenumbers](https://github.com/daviddrysdale/python-phonenumbers) |
+| `presidio`             | Entities supported by [Microsoft Presidio](https://microsoft.github.io/presidio/) (e.g., names, URLs, NHS numbers, IBAN codes) |
 
 ## Considerations before use
 
