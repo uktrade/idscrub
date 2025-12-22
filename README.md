@@ -1,6 +1,6 @@
 # idscrub 🧽✨
 
-* Names and other personally identifying information are often present in text.
+* Names and other personally identifying information are often present in text, even if they are not clearly visible or requested.
 * This information may need to be removed prior to further analysis in many cases.
 * `idscrub` identifies and removes (*✨scrubs✨*) personal data from text using [regular expressions](https://en.wikipedia.org/wiki/Regular_expression) and [named-entity recognition](https://en.wikipedia.org/wiki/Named-entity_recognition).
 
