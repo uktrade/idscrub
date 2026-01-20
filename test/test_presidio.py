@@ -4,32 +4,32 @@ from pandas.testing import assert_frame_equal
 
 
 # Note: These tests will fail if the kernel has not been restarted since the SpaCy model was downloaded.
-def test_persidio():
+def test_presidio():
     scrub = IDScrub(
         ["Our names are Hamish McDonald, L. Salah, and Elena Suárez.", "My IBAN code is GB91BKEN10000041610008."]
     )
-    scrubbed_texts = scrub.presidio(entities_to_scrub=["PERSON", "IBAN_CODE"])
+    scrubbed_texts = scrub.presidio_entities(entities=["PERSON", "IBAN_CODE"])
 
     assert scrubbed_texts == ["Our names are [PERSON], [PERSON], and [PERSON].", "My IBAN code is [IBAN_CODE]."]
 
 
-def test_persidio_map():
+def test_presidio_map():
     scrub = IDScrub(
         ["Our names are Hamish McDonald, L. Salah, and Elena Suárez.", "My IBAN code is GB91BKEN10000041610008."]
     )
-    scrubbed_texts = scrub.presidio(
-        entities_to_scrub=["PERSON", "IBAN_CODE"], replacement_map={"PERSON": "[PHELLO]", "IBAN_CODE": "[IHELLO]"}
+    scrubbed_texts = scrub.presidio_entities(
+        entities=["PERSON", "IBAN_CODE"], replacement_map={"PERSON": "[PHELLO]", "IBAN_CODE": "[IHELLO]"}
     )
 
     assert scrubbed_texts == ["Our names are [PHELLO], [PHELLO], and [PHELLO].", "My IBAN code is [IHELLO]."]
 
 
-def test_persidio_get_data():
+def test_presidio_get_data():
     scrub = IDScrub(
         ["Our names are Hamish McDonald, L. Salah, and Elena Suárez.", "My IBAN code is GB91BKEN10000041610008."]
     )
 
-    scrub.presidio(entities_to_scrub=["PERSON", "IBAN_CODE"])
+    scrub.presidio_entities(entities=["PERSON", "IBAN_CODE"])
 
     df = scrub.get_scrubbed_data()
 

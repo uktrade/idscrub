@@ -6,7 +6,7 @@ from pandas.testing import assert_frame_equal
 def test_chain(scrub_object):
     scrub_object.uk_phone_numbers()
     scrub_object.uk_postcodes()
-    scrubbed = scrub_object.spacy_persons()
+    scrubbed = scrub_object.spacy_entities()
 
     assert scrubbed == [
         "Our names are [PERSON], [PERSON], and [PERSON].",
@@ -38,7 +38,7 @@ def test_chain_order(scrub_object):
 def test_get_scrubbed_data_chain(scrub_object):
     scrub_object.uk_phone_numbers()
     scrub_object.uk_postcodes()
-    scrub_object.spacy_persons()
+    scrub_object.spacy_entities()
 
     df = scrub_object.get_scrubbed_data()
 

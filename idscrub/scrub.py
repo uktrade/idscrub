@@ -546,64 +546,86 @@ class IDScrub:
 
         return model
 
-    def spacy_persons(
+    def spacy_entities(
         self,
         model_name: str = "en_core_web_trf",
+        entities: list[str] = ["PERSON", "ORG", "NORP"],
+        replacement_map: str = {"PERSON": "[PERSON]", "ORG": "[ORG]", "NORP": "[NORP]"},
+        label_prefix: str = None,
         n_process: int = 1,
         batch_size: int = 1000,
-        replacement_text: str = "[PERSON]",
-        label: str = "person",
     ) -> list[str]:
         """
-        Remove PERSON entities using a Spacy model.
+        Remove SpaCy entities using a given SpaCy model.
+        Documentation for entity labels: https://spacy.io/models/en#en_core_web_trf
         Note: only "en_core_web_trf" has been evaluated.
 
         Args:
             model_name (str): Name of Spacy model. Only `en_core_web_trf` has been evaluated.
+            entities (list[str]): Which SpaCy entities to scrub (based on SpaCy entity keys).
+            replacement_map (str): The replacement texts for the removed text. Index will match `entities`.
+            label_prefix (str): Prefix for the Spacy entity removed, e.g. `{label}_person`.
             n_process (int): Number of parallel processes.
             batch_size (int): The number of texts in each batch.
-            replacement_text (str): The replacement text for the removed text.
-            label (str): Label for the personal data removed.
 
         Returns:
             list[str]: The input list of text with PERSON entities scrubbed.
         """
-        self.logger.info(f"Scrubbing names using SpaCy model `{model_name}`...")
+
+        self.logger.info(
+            f"Scrubbing SpaCy entities `{', '.join(str(entitity) for entitity in entities)}` using SpaCy model `{model_name}`..."
+        )
 
         texts = self.get_texts()
 
-        if self.replacement_text:
-            replacement_text = self.replacement_text
-
         cleaned_texts = []
+        labels = []
 
         nlp = self.get_spacy_model(model_name)
         stripped_texts = [s.strip() if s.isspace() else s for s in texts]
         documents = nlp.pipe(stripped_texts, n_process=n_process, batch_size=batch_size)
 
         for i, (ids, doc, stripped_text) in tqdm(
-            enumerate((zip(self.text_ids, documents, stripped_texts))), total=len(texts)
+            enumerate(zip(self.text_ids, documents, stripped_texts)), total=len(texts)
         ):
-            if stripped_text == "":
+            if not stripped_text:
                 cleaned_texts.append(texts[i])
                 continue
 
-            # Collect person entities
-            person_entities = [
-                ent for ent in doc.ents if ent.label_ == "PERSON" and ent.text not in {"PERSON", "HANDLE"}
-            ]
-            self.scrubbed_data.extend({self.text_id_name: ids, label: ent.text} for ent in person_entities)
+            all_found_entities = []
 
-            # Remove person entities
+            for entity_type in entities:
+                found = [
+                    ent for ent in doc.ents if ent.label_ == entity_type and ent.text not in {entity_type, "HANDLE"}
+                ]
+
+                for ent in found:
+                    label = ent.label_.lower()
+                    if label_prefix:
+                        label = f"{label_prefix}_{label}"
+                    labels.append(label)
+                    self.scrubbed_data.append({self.text_id_name: ids, label: ent.text})
+
+                if self.replacement_text:
+                    all_found_entities.extend((ent.start_char, ent.end_char, self.replacement_text) for ent in found)
+                elif replacement_map:
+                    all_found_entities.extend(
+                        (ent.start_char, ent.end_char, replacement_map.get(entity_type)) for ent in found
+                    )
+                else:
+                    all_found_entities.extend((ent.start_char, ent.end_char, f"[{entity_type}]") for ent in found)
+
             cleaned = stripped_text
-            for ent in sorted(person_entities, key=lambda x: [x.start_char], reverse=True):
-                cleaned = cleaned[: ent.start_char] + replacement_text + cleaned[ent.end_char :]
+
+            for start, end, repl in sorted(all_found_entities, key=lambda x: x[0], reverse=True):
+                cleaned = cleaned[:start] + repl + cleaned[end:]
 
             cleaned_texts.append(cleaned)
 
         self.cleaned_texts = cleaned_texts
 
-        self.log_message(label)
+        for label in set(labels):
+            self.log_message(label)
 
         return cleaned_texts
 
@@ -642,16 +664,17 @@ class IDScrub:
 
         return tokenizer
 
-    def huggingface_persons(
+    def huggingface_entities(
         self,
         hf_model_path: str = "dbmdz/bert-large-cased-finetuned-conll03-english",
         download_directory: str = f"{DOWNLOAD_DIR}/huggingface/",
+        entity="PER",
         replacement_text: str = "[PERSON]",
         label: str = "person",
         batch_size: int = 8,
     ) -> list[str]:
         """
-        Remove PERSON entities using a Hugging Face model.
+        Remove entities using a Hugging Face model. Default is a PERSON entity identifier.
         Note: No Hugging Face models have been evaluated for performance.
 
         Args:
@@ -697,7 +720,7 @@ class IDScrub:
                 continue
 
             person_entities = [
-                ent for ent in entities if ent["entity_group"] == "PER" and ent["word"] not in {"HANDLE", "PERSON"}
+                ent for ent in entities if ent["entity_group"] == entity and ent["word"] not in {"HANDLE", entity}
             ]
             self.scrubbed_data.extend({self.text_id_name: ids, label: ent["word"]} for ent in person_entities)
 
@@ -713,10 +736,10 @@ class IDScrub:
 
         return cleaned_texts
 
-    def presidio(
+    def presidio_entities(
         self,
         model_name: str = "en_core_web_trf",
-        entities_to_scrub: list[str] = [
+        entities: list[str] = [
             "PERSON",
             "UK_NINO",
             "UK_NHS",
@@ -736,15 +759,18 @@ class IDScrub:
 
         Args:
             model_name (str): spaCy model to use
-            entities_to_scrub (list[str]): Entity types to scrub (e.g. ["PERSON", "IP_ADDRESS"])
+            entities (list[str]): Entity types to scrub (e.g. ["PERSON", "IP_ADDRESS"])
             replacement_map (dict): Mapping of entity_type to replacement string (e.g. {'PERSON': '[PERSON]'})
             label_prefix (str): Prefix for the Presidio personal data type removed, e.g. `{label}_person`.
+            Useful if you wish to identify this having being scrubbed by Presidio.
 
         Returns:
             list[str]: The input list of text with entities replaced.
         """
 
-        self.logger.info("Scrubbing using Presidio...")
+        self.logger.info(
+            f"Scrubbing Presidio entities `{', '.join(str(entitity) for entitity in entities)}` using SpaCy model `{model_name}`..."
+        )
 
         texts = self.get_texts()
 
@@ -762,7 +788,7 @@ class IDScrub:
         anonymizer = AnonymizerEngine()
 
         cleaned_texts = []
-        unique_labels = []
+        all_labels = []
 
         stripped_texts = [s.strip() if s.isspace() else s for s in texts]
 
@@ -772,14 +798,15 @@ class IDScrub:
                 continue
 
             results = analyzer.analyze(text=stripped_text, language="en")
-            results = [r for r in results if r.entity_type in entities_to_scrub]
+            results = [r for r in results if r.entity_type in entities]
 
             if label_prefix:
                 labels = [f"{label_prefix}_{res.entity_type.lower()}" for res in results]
             else:
                 labels = [f"{res.entity_type.lower()}" for res in results]
 
-            unique_labels.append(list(set(labels)))
+            for label in labels:
+                all_labels.append(label)
 
             self.scrubbed_data.extend(
                 {self.text_id_name: ids, label: stripped_text[res.start : res.end]}
@@ -806,9 +833,8 @@ class IDScrub:
 
         self.cleaned_texts = cleaned_texts
 
-        for label in unique_labels:
-            if label:
-                self.log_message(label[0])
+        for label in set(all_labels):
+            self.log_message(label)
 
         return cleaned_texts
 
@@ -839,7 +865,8 @@ class IDScrub:
         custom_regex_patterns: list = None,
         custom_replacement_texts: list[str] = None,
         model_name: str = "en_core_web_trf",
-        presidio_entities_to_scrub: list[str] = [
+        spacy_entities: list[str] = ["PERSON", "ORG", "NORP"],
+        presidio_entities: list[str] = [
             "PERSON",
             "EMAIL_ADDRESS",
             "UK_NINO",
@@ -876,8 +903,8 @@ class IDScrub:
                 custom_replacement_texts=custom_replacement_texts,
             )
 
-        self.presidio(model_name=model_name, entities_to_scrub=presidio_entities_to_scrub)
-        self.spacy_persons(model_name=model_name, n_process=n_process, batch_size=batch_size)
+        self.presidio_entities(model_name=model_name, entities=presidio_entities)
+        self.spacy_entities(model_name=model_name, entities=spacy_entities, n_process=n_process, batch_size=batch_size)
         self.google_phone_numbers()
         self.all_regex()
 
