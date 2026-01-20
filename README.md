@@ -24,7 +24,7 @@ Basic usage example (see [basic_usage.ipynb](https://github.com/uktrade/idscrub/
 from idscrub import IDScrub
 
 scrub = IDScrub(['Our names are Hamish McDonald, L. Salah, and Elena Suárez.', 'My number is +441111111111 and I live at AA11 1AA.'])x
-scrubbed_texts = scrub.scrub(scrub_methods=['spacy_persons', 'uk_phone_numbers', 'uk_postcodes'])
+scrubbed_texts = scrub.scrub(scrub_methods=['spacy_entities', 'uk_phone_numbers', 'uk_postcodes'])
 
 print(scrubbed_texts)
 
