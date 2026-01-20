@@ -63,6 +63,52 @@ def test_handles():
     assert scrubbed == ["Our usernames are [HANDLE], [HANDLE], [HANDLE] and [HANDLE]."]
 
 
+def test_uk_addresses():
+    scrub = IDScrub(
+        [
+            "221B Baker Street",
+            "12 high road",
+            "Flat 3B, 47 King's Court",
+            "12–14 High Street",
+            "5a-7a Church Lane",
+            "1/2 Main Street",
+            "10 St John’s Rd",
+            "33 Queen-Anne Walk",
+            "8 Deansgate Ct",
+        ]
+    )
+
+    scrubbed = scrub.uk_addresses()
+    assert scrubbed == [
+        "[ADDRESS]",
+        "[ADDRESS]",
+        "[ADDRESS]",
+        "[ADDRESS]",
+        "[ADDRESS]",
+        "[ADDRESS]",
+        "[ADDRESS]",
+        "[ADDRESS]",
+        "[ADDRESS]",
+    ]
+
+    negative_tests = [
+        "12 High",
+        "Baker Street",
+        "High Road 12",
+        "Go to the high road now",
+        "500 the big building near river",
+        "I walked the long road home",
+        "12b misspelledstreet",
+        "London SW1A 1AA",
+        "12,,, High?",
+    ]
+
+    scrub = IDScrub(negative_tests)
+
+    scrubbed = scrub.uk_addresses()
+    assert scrubbed == negative_tests
+
+
 def test_claimants():
     scrub = IDScrub(
         texts=[
