@@ -640,7 +640,7 @@ class IDScrub:
         Note: No Hugging Face models have been evaluated for performance.
 
         Args:
-            hf_model_path (str): Path to the Hugging Face model on the DBT mirror.
+            hf_model_path (str): Path to the Hugging Face model.
             Only `dbmdz/bert-large-cased-finetuned-conll03-english` has been evaluated.
             download_directory (str): Directory in which to save the model.
             Default is current working directory.
@@ -678,7 +678,7 @@ class IDScrub:
         Note: No Hugging Face models have been evaluated for performance.
 
         Args:
-            hf_model_path (str): Path to the Hugging Face model on the DBT mirror.
+            hf_model_path (str): Path to the Hugging Face model.
             Only `dbmdz/bert-large-cased-finetuned-conll03-english` has been tested.
             download_directory (str): Directory in which to save the model.
             Default is current working directory.
