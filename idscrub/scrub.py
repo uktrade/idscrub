@@ -453,6 +453,24 @@ class IDScrub:
 
         return self.scrub_regex(pattern, replacement_text, label=label)
 
+    def uk_addresses(self, replacement_text: str = "[ADDRESS]", label: str = "uk_address") -> list[str]:
+        """
+        Removes addresses.
+        e.g. `10 Downing Street` scrubbed
+
+        Args:
+            replacement_text (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
+
+        Returns:
+            list[str]: The input list of text with postcodes replaced.
+        """
+
+        self.logger.info("Scrubbing addresses using regex...")
+        pattern = r"(?i)\b(?:flat\s+\w+,\s*)?\d+[a-z]?(?:[-–/]\d+[a-z]?)?\s+[a-z][a-z'’\- ]+\s+(street|st|road|rd|avenue|ave|lane|ln|close|cl|drive|dr|way|walk|gardens|gdns|place|pl|mews|court|ct|crescent|cres|terrace|ter)\b"
+
+        return self.scrub_regex(pattern, replacement_text, label)
+
     def claimants(self, replacement_text="[CLAIMANT]", label: str = "claimant") -> list[str]:
         """
         Removes claimant names from employment tribunal texts.
@@ -810,6 +828,7 @@ class IDScrub:
         self.handles()
         self.ip_addresses()
         self.uk_phone_numbers()
+        self.uk_addresses()
         self.uk_postcodes()
         self.titles()
 
