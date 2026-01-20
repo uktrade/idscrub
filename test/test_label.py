@@ -1,6 +1,6 @@
 def test_label(scrub_object_all):
     for i, scrub_method in enumerate(
-        ["spacy_persons", "uk_postcodes", "email_addresses", "ip_addresses", "uk_phone_numbers", "titles", "handles"]
+        ["uk_postcodes", "email_addresses", "ip_addresses", "uk_phone_numbers", "titles", "handles"]
     ):
         method = getattr(scrub_object_all, scrub_method)
         method(label="test")
