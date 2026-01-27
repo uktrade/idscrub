@@ -1,4 +1,4 @@
-https://img.shields.io/badge/status-development-orange
+![Development](https://img.shields.io/badge/status-development-orange)
 
 # idscrub 🧽✨
 
