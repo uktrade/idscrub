@@ -63,6 +63,7 @@ class IDScrub:
         text_ids: list | Iterable = None,
         text_id_name: str = "text_id",
         replacement: str = None,
+        exclude: list[str] = [],
         verbose: bool = True,
     ):
         """
@@ -75,6 +76,7 @@ class IDScrub:
             This is used to identify texts in get_scrubbed_data().
             text_id_name (str): Name of the ID column in get_scrubbed_data(). Default is `text_id`.
             replacement (str): A global string to replace every scrubbed string with.
+            exclude (list[str]): A list of strings that will not be scrubbed if identified.
             verbose (bool): Whether to show all log messages or only warnings.
         """
 
@@ -98,6 +100,7 @@ class IDScrub:
 
         self.replacement = replacement
         self.text_id_name = text_id_name
+        self.exclude = exclude
         self.scrubbed_texts = []
         self.idents: list[IDScrub.IDEnt] = []
 
@@ -1017,9 +1020,10 @@ class IDScrub:
 
             self.idents_all.extend(method(texts=self.texts, text_ids=self.text_ids, **args))
 
-        idents_resolved = self.resolve_overlaps(self.idents_all)
+        idents_exclude = [ident for ident in self.idents_all if ident.text not in self.exclude]
+        idents_resolved = self.resolve_overlaps(idents=idents_exclude)
         self.idents.extend(idents_resolved)
-        self.scrubbed_texts = self.scrub_text(self.texts, self.text_ids, self.idents)
+        self.scrubbed_texts = self.scrub_text(texts=self.texts, text_ids=self.text_ids, idents=self.idents)
 
         return self.scrubbed_texts
 
