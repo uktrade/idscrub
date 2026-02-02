@@ -11,7 +11,15 @@
 
 ## Installation
 
-`idscrub` can be installed using `pip` into a Python **>=3.12** environment. Example:
+`idscrub` can be installed using `pip` into a Python **>=3.12** environment. 
+
+We recommend installing with the SpaCy transformer model (`en_core_web_trf`) as a dependency:
+
+```console
+pip install idscrub[trf]
+```
+
+If you do not need SpaCy:
 
 ```console
 pip install idscrub
