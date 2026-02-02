@@ -16,11 +16,7 @@
 ```console
 pip install idscrub
 ```
-or with the spaCy transformer model (`en_core_web_trf`) already installed:
 
-```console
-pip install idscrub[trf]
-```
 ## How to use the code
 
 Basic usage example (see [basic_usage.ipynb](https://github.com/uktrade/idscrub/blob/main/notebooks/basic_usage.ipynb) for further examples):
@@ -28,13 +24,54 @@ Basic usage example (see [basic_usage.ipynb](https://github.com/uktrade/idscrub/
 ```python
 from idscrub import IDScrub
 
-scrub = IDScrub(['Our names are Hamish McDonald, L. Salah, and Elena Suárez.', 'My number is +441111111111 and I live at AA11 1AA.'])x
-scrubbed_texts = scrub.scrub(scrub_methods=['spacy_entities', 'uk_phone_numbers', 'uk_postcodes'])
+scrub = IDScrub(['Our names are Hamish McDonald, L. Salah, and Elena Suárez.', 'My number is +441111111111 and I live at AA11 1AA.'])
+scrubbed_texts = scrub.scrub(
+    pipeline=[
+        {"method": "spacy_entities", "entity_types": ["PERSON"]},
+        {"method": "uk_phone_numbers"},
+        {"method": "uk_postcodes"},
+    ]
+)
 
 print(scrubbed_texts)
 
 # Output: ['Our names are [PERSON], [PERSON], and [PERSON].', 'My number is [PHONENO] and I live at [POSTCODE].']
 ```
+
+This package will identify and scrub many types of data that you might not want to scrub, such as locations or context-relevent names. **We therefore highly recommend manually removing scrubbed data identified by `idscrub` from your original dataset on a case-by-case basis.**
+
+
+Scrubbed data can be identified using the following methods (see the [usage example notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/basic_usage.ipynb) for further information):
+
+```python
+import pandas as pd
+from idscrub import IDScrub
+
+# From lists of text:
+scrub = IDScrub(['Our names are Hamish McDonald, L. Salah, and Elena Suárez.', 'My number is +441111111111 and I live at AA11 1AA.'])
+scrubbed_texts = scrub.scrub(
+    pipeline=[
+        {"method": "spacy_entities", "entity_types": ["PERSON"]},
+        {"method": "uk_phone_numbers"},
+        {"method": "uk_postcodes"},
+    ]
+)
+scrubbed_df = scrub.get_scrubbed_data()
+print(scrubbed_df)
+
+# From a Pandas DataFrame:
+scrubbed_df, scrubbed_data = IDScrub.dataframe(
+    df=pd.read_csv('path/to/csv'), 
+    id_col="ID", 
+    pipeline=[
+        {"method": "spacy_entities", "entity_types": ["PERSON"]},
+        {"method": "uk_phone_numbers"},
+        {"method": "uk_postcodes"},
+    ]
+)
+print(scrubbed_df)
+```
+
 ## Personal data types supported
 
 Personal data can either be scrubbed as methods with arguments for extra customisation, e.g. `IDScrub.google_phone_numbers(region="GB")`, or as a string arguments with default configurations (see above). The method name and its string representation are the same. 
@@ -48,6 +85,7 @@ Personal data can either be scrubbed as methods with arguments for extra customi
 | `email_addresses`      | Email addresses (e.g. john@email.com)   |
 | `titles`               | Titles (e.g. Mr., Mrs., Dr.)    |
 | `handles`              | Social media handles (e.g. @username)  |
+| `urls`                 | URLs (e.g. www.bbc.co.uk) |
 | `ip_addresses`         | IP addresses (e.g. 8.8.8.8)  |
 | `uk_postcodes`         | UK postal codes (e.g. SW1A 2AA) |
 | `uk_addresses`         | UK addresses (e.g. 10 Downing Street)  |
@@ -108,7 +146,7 @@ This project is managed by [uv](https://docs.astral.sh/uv/).
 To install all dependencies for this project, run:
 
 ```console
-uv sync --all-extras
+uv sync
 ```
 
 If you do not have Python 3.12, run:

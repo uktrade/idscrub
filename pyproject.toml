@@ -15,17 +15,13 @@ dependencies = [
     "pandas<3.0",
     "phonenumbers>=9.0.18",
     "pip>=25.3",
-    "spacy-transformers>=1.3.9",
+    "spacy",
+    "transformers",
+    "en_core_web_trf @ https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.8.0/en_core_web_trf-3.8.0-py3-none-any.whl",
     "tqdm>=4.67.1",
     "presidio-analyzer",
     "presidio-anonymizer",
 ]
-
-[project.optional-dependencies]
-trf = ["en_core_web_trf"]
-
-[tool.uv.sources]
-en_core_web_trf = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_trf-3.8.0/en_core_web_trf-3.8.0-py3-none-any.whl" }
 
 [dependency-groups]
 dev = [

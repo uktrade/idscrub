@@ -2,8 +2,9 @@ import logging
 import os
 import re
 import warnings
+from collections import defaultdict
 from collections.abc import Iterable
-from functools import partial
+from dataclasses import asdict, dataclass
 
 import pandas as pd
 import phonenumbers
@@ -11,8 +12,6 @@ import spacy
 from huggingface_hub.utils import HFValidationError
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import SpacyNlpEngine
-from presidio_anonymizer import AnonymizerEngine
-from presidio_anonymizer.entities import OperatorConfig
 from spacy.cli import download
 from spacy.language import Language
 from tqdm import tqdm
@@ -29,12 +28,41 @@ trf_logging.set_verbosity_error()
 
 
 class IDScrub:
+    """
+    Class for identifying and scrubbing entities in text.
+    """
+
+    @dataclass
+    class IDEnt:
+        """
+        Structured representation of an identified entity (ident) within text.
+
+        Attributes:
+            text_id (str | int | float): A unique identifier for the original text.
+            text (str): The exact substring extracted from the original text.
+            start (int): The starting character offset of the ident within the original text.
+            end (int): The ending character offset of the ident within the original text.
+            label (str): The ident type (e.g. 'person').
+            replacement (str): The text that should replace this ident during scrubbing.
+            priority (float): A priority score for overlapping entitities.
+            source (str): The source model or method that identified the ident.
+        """
+
+        text_id: str | int | float
+        text: str
+        start: int
+        end: int
+        label: str
+        replacement: str
+        priority: float
+        source: str
+
     def __init__(
         self,
-        texts: list[str] = [],
+        texts: list[str] = None,
         text_ids: list | Iterable = None,
         text_id_name: str = "text_id",
-        replacement_text: str = None,
+        replacement: str = None,
         verbose: bool = True,
     ):
         """
@@ -46,32 +74,35 @@ class IDScrub:
             such as the ID column in a DataFrame. If None, an integer index starting at 1 is applied.
             This is used to identify texts in get_scrubbed_data().
             text_id_name (str): Name of the ID column in get_scrubbed_data(). Default is `text_id`.
-            replacement_text (str): A global string to replace every scrubbed
-            string with.
+            replacement (str): A global string to replace every scrubbed string with.
             verbose (bool): Whether to show all log messages or only warnings.
         """
 
-        assert isinstance(texts, list) and all(isinstance(text, str) for text in texts), (
-            "`texts` can only be a list of strings or a single string in a list."
-        )
+        if not isinstance(texts, list):
+            raise TypeError("`texts` must be a list.")
+        if not all(isinstance(text, str) for text in texts):
+            raise TypeError("`texts` must be a list of strings.")
 
-        assert isinstance(replacement_text, str) or isinstance(replacement_text, type(None)), (
-            "`replacement_text` can only be string."
-        )
+        if replacement is not None and not isinstance(replacement, str):
+            raise TypeError("`replacement` must be a string or None.")
 
         self.texts = texts
 
-        if text_ids:
-            self.text_ids = text_ids
-        else:
-            self.text_ids = range(1, len(self.texts) + 1)
+        if text_ids is None:
+            text_ids = range(1, len(self.texts) + 1)
 
-        assert len(self.texts) == len(self.text_ids), "Length of texts is different to the length of text IDs."
+        if not len(self.texts) == len(text_ids):
+            raise ValueError("Length of texts is different to the length of text IDs.")
 
+        self.text_ids = text_ids
+
+        self.replacement = replacement
         self.text_id_name = text_id_name
-        self.cleaned_texts = []
-        self.scrubbed_data = []
-        self.replacement_text = replacement_text
+        self.scrubbed_texts = []
+        self.idents: list[IDScrub.IDEnt] = []
+
+        self.hf_ner = None
+        self.spacy_docs = None
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG if verbose else logging.WARNING)
@@ -84,284 +115,293 @@ class IDScrub:
 
         self.logger.info("Texts loaded.")
 
-    def get_texts(self) -> list[str]:
-        """
-        Get the text that will be processed.
-        If no cleaning has occured, then use the raw input
-        texts. If cleaning has occured then update the cleaned texts.
-
-        Args:
-            None
-
-        Returns:
-            A Pandas DataFrame with text_id
-            and scrubbed in a list format.
-        """
-        if self.cleaned_texts:
-            texts = self.cleaned_texts
-        else:
-            texts = self.texts
-
-        return texts
-
-    def get_scrubbed_data(self) -> pd.DataFrame:
-        """
-        Turn text ids and scrubbed text into a DataFrame.
-
-        Args:
-            None
-
-        Returns:
-            A Pandas DataFrame with text_id
-            and scrubbed in a list format.
-        """
-        df = pd.DataFrame(self.scrubbed_data)
-
-        if self.text_id_name not in df.columns:
-            return None
-
-        # Group by the id and aggregate non-null values into lists
-        if df[self.text_id_name].dtype == object or df[self.text_id_name].dtype == str:
-            grouped = (
-                df.groupby(self.text_id_name, sort=False)
-                .agg(lambda x: [i for i in x if pd.notna(i)])
-                .reset_index()
-                .map(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
-            )
-        else:
-            grouped = (
-                df.groupby(self.text_id_name)
-                .agg(lambda x: [i for i in x if pd.notna(i)])
-                .reset_index()
-                .map(lambda x: None if isinstance(x, list) and len(x) == 0 else x)
-            )
-
-        return grouped
-
-    def log_message(self, label) -> None:
-        """
-        Log message with count of PII-type scrubbed.
-
-        Args:
-            label (str): Label for the personal data removed.
-        Returns:
-            int: The count of PII-type scrubbed.
-        """
-
-        if any(label in key for key in self.scrubbed_data):
-            scrubbed_data = self.get_scrubbed_data()
-            count = scrubbed_data[label].dropna().apply(len).sum()
-        else:
-            count = 0
-
-        self.logger.info(f"{count} {label} scrubbed.")
-
-        return count
-
-    def scrub_and_collect(self, match, text, replacement_text, i, label) -> str:
-        """
-        Scrub pattern match and collect scrubbed name.
-
-        Args:
-            match (str): The regex match passed from `re.sub()`.
-            i (int): the enumerate id of the string.
-            label (str): Label for the personal data removed.
-
-        Returns:
-            str: The replacement text.
-        """
-
-        self.scrubbed_data.append({self.text_id_name: i, label: match.group()})
-
-        return replacement_text
-
-    def scrub_regex(self, pattern, replacement_text, label) -> list[str]:
+    def find_regex(
+        self,
+        texts: list[str],
+        text_ids: list,
+        pattern: str,
+        replacement: str,
+        label: str,
+        priority: float,
+    ) -> list[IDEnt]:
         """
         General method to clean text using a regex pattern.
 
         Args:
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
             pattern (str): Regex pattern to apply.
-            replacement_text (str): The replacement text for the removed text.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: Cleaned texts.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        texts = self.get_texts()
+        if self.replacement:
+            replacement = self.replacement
 
-        compiled_pattern = re.compile(pattern, flags=re.IGNORECASE)
+        compiled = re.compile(pattern, re.IGNORECASE)
+        idents = []
 
-        if self.replacement_text:
-            replacement_text = self.replacement_text
+        for text_id, text in zip(text_ids, texts):
+            for match in compiled.finditer(text):
+                idents.append(
+                    self.IDEnt(
+                        text_id=text_id,
+                        text=match.group(),
+                        start=match.start(),
+                        end=match.end(),
+                        label=label,
+                        replacement=replacement,
+                        priority=priority,
+                        source="regex",
+                    )
+                )
 
-        cleaned_texts = [
-            compiled_pattern.sub(
-                partial(
-                    self.scrub_and_collect,
-                    text=text,
-                    replacement_text=replacement_text,
-                    i=i,
-                    label=label,
-                ),
-                text,
-            )
-            for i, text in zip(self.text_ids, texts)
-        ]
-
-        self.cleaned_texts = cleaned_texts
-
-        self.log_message(label)
-
-        return cleaned_texts
+        return idents
 
     def custom_regex(
-        self,
-        custom_regex_patterns: list[str] = None,
-        custom_replacement_texts: list[str] = None,
-        labels: list[str] = None,
-    ) -> list[str]:
+        self, texts: list[str] = None, text_ids: list = None, patterns: dict = None, source: str = "custom_regex"
+    ) -> list[IDEnt]:
         """
         Remove text matching a custom regex pattern.
 
         Args:
-            custom_regex_patterns list[str]: Regex(s) pattern to apply.
-            custom_replacement_texts list[str]: The replacement texts for the removed text.
-            Defaults to '[REDACTED]' for all.
-            labels list[str]: Labels for patterns removed.
-
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            patterns (dict): {"name": {"pattern": r"John", "replacement": "[NAME]", "priority": 0.5}}
+            source (str): The methodological source of the scrubbed ident.
         Returns:
-            list[str]: Cleaned texts.
+            list[IDEnt]: A list of IDEnt objects.
 
         """
-        self.logger.info("Scrubbing custom regex...")
 
-        if custom_replacement_texts:
-            assert len(custom_regex_patterns) == len(custom_replacement_texts), (
-                "There must be a replacement text for each pattern."
-            )
-        else:
-            custom_replacement_texts = ["[REDACTED]"] * len(custom_regex_patterns)
+        idents = []
 
-        for i, (pattern, replacement_text) in enumerate(zip(custom_regex_patterns, custom_replacement_texts)):
-            if labels:
-                assert len(custom_regex_patterns) == len(labels), "There must be a label for each pattern."
-                self.scrub_regex(pattern, replacement_text, label=f"{labels[i]}")
-            else:
-                self.scrub_regex(pattern, replacement_text, label=f"custom_regex_{i + 1}")
+        for text, text_id in zip(texts, text_ids):
+            for label, params in patterns.items():
+                pattern = params["pattern"]
+                replacement = params.get("replacement", "[REDACTED]")
+                priority = params.get("priority", 0.5)
 
-        return self.cleaned_texts
+                compiled = re.compile(pattern, flags=re.IGNORECASE)
 
-    def email_addresses(self, replacement_text: str = "[EMAIL_ADDRESS]", label: str = "email_address") -> list[str]:
+                for match in compiled.finditer(text):
+                    idents.append(
+                        self.IDEnt(
+                            text_id=text_id,
+                            text=match.group(),
+                            start=match.start(),
+                            end=match.end(),
+                            label=label,
+                            replacement=replacement,
+                            priority=priority,
+                            source=source,
+                        )
+                    )
+
+        return idents
+
+    def email_addresses(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        replacement: str = "[EMAIL_ADDRESS]",
+        label: str = "email_address",
+        priority: float = 0.7,
+    ) -> list[IDEnt]:
         """
         Remove email addresses using regex.
-        e.g. `johnsmith@gmail.com` scrubbed
+        e.g. `johnsmith@mail.com` scrubbed
 
         Args:
-            replacement_text (str): The replacement text for the removed text.
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with email addresses replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        self.logger.info("Scrubbing email addresses using regex...")
         pattern = r"\b\S+@\S+\.\S+\b"
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
 
-        return self.scrub_regex(pattern, replacement_text, label=label)
+    def urls(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        replacement: str = "[URL]",
+        label: str = "url",
+        priority: float = 0.3,
+    ) -> list[IDEnt]:
+        """
+        Remove `http`, `https` and `www` URLs using regex
+        e.g. `www.google.com` scrubbed.
 
-    def handles(self, replacement_text: str = "[HANDLE]", label: str = "handle") -> list[str]:
+        `example.com` will not be scrubbed by this method.
+
+        Args:
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
+            replacement (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
+
+        Returns:
+            list[IDEnt]: A list of IDEnt objects.
+        """
+
+        pattern = r"\b(?:https?://|www\.)[^\s<>()\"']+"
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
+
+    def handles(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        replacement: str = "[HANDLE]",
+        label: str = "handle",
+        priority: float = 0.4,
+    ) -> list[IDEnt]:
         """
         Remove `@` user handles using regex
         e.g. `@username` scrubbed
 
         Args:
-            replacement_text (str): The replacement text for the removed text.
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with handles replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        self.logger.info("Scrubbing @user handles using regex...")
         pattern = r"@[\w.-]+(?=\b)"
-
-        return self.scrub_regex(pattern, replacement_text, label=label)
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
 
     def google_phone_numbers(
-        self, region: str = "GB", replacement_text: str = "[PHONENO]", label: str = "phone_number"
-    ) -> list[str]:
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        region: str = "GB",
+        replacement: str = "[PHONENO]",
+        label: str = "phone_number",
+        priority: float = 0.8,
+    ) -> list[IDEnt]:
         """
         Remove phone numbers using Google's `phonenumbers`.
         e.g. `+441234567891` scrubbed
 
         Args:
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
             region (str): The region to find phone numbers for. See `phonenumbers` regions.
-            replacement_text (str): The replacement text for the removed text.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with phone numbers replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        self.logger.info(f"Scrubbing {region} phone numbers using Google's `phonenumbers`...")
+        if self.replacement:
+            replacement = self.replacement
 
-        texts = self.get_texts()
+        idents = []
 
-        if self.replacement_text:
-            replacement_text = self.replacement_text
-
-        cleaned_texts = []
-
-        for i, text in zip(self.text_ids, texts):
+        for text, text_id in zip(texts, text_ids):
             matches = list(phonenumbers.PhoneNumberMatcher(text, region))
-            phone_nos = [match.raw_string for match in matches]
+            for match in matches:
+                idents.append(
+                    self.IDEnt(
+                        text_id=text_id,
+                        text=match.raw_string,
+                        start=match.start,
+                        end=match.end,
+                        priority=priority,
+                        replacement=replacement,
+                        label="phone_no",
+                        source="google_phone_numbers",
+                    )
+                )
 
-            for phone_no in phone_nos:
-                self.scrubbed_data.append({self.text_id_name: i, label: phone_no})
+        return idents
 
-            cleaned = text
-            for match in reversed(matches):
-                cleaned = cleaned[: match.start] + replacement_text + cleaned[match.end :]
-
-            cleaned_texts.append(cleaned)
-
-        self.cleaned_texts = cleaned_texts
-
-        self.log_message(label)
-
-        return cleaned_texts
-
-    def uk_phone_numbers(self, replacement_text: str = "[PHONENO]", label: str = "uk_phone_number") -> list[str]:
+    def uk_phone_numbers(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        replacement: str = "[PHONENO]",
+        label: str = "uk_phone_number",
+        priority: float = 0.8,
+    ) -> list[IDEnt]:
         """
         Remove phone numbers using regex.
         e.g. `+441234567891` scrubbed
 
         Args:
-            replacement_text (str): The replacement text for the removed text.
+            texts (list[str]): Strings to scrub.
+            If None, current cleaned state of `text` passed at Class initiation used.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with phone numbers replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        self.logger.info("Scrubbing phone numbers using regex...")
         pattern = r"(\+?\d[\d\s]{7,}\d)"
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
 
-        return self.scrub_regex(pattern, replacement_text, label=label)
-
-    def titles(self, strict: bool = False, replacement_text: str = "[TITLE]", label: str = "title") -> list[str]:
+    def titles(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        strict: bool = False,
+        replacement: str = "[TITLE]",
+        label: str = "title",
+        priority: float = 0.4,
+    ) -> list[IDEnt]:
         """
         Remove titles using regex.
 
         Args:
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `text` passed at Class initiation used.
             strict (bool): Whether to use all of the titles or only essential titles.
             If strict, you may find scrubbing of common words, such as general.
-            replacement_text (str): The replacement text for the removed text.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with names after titles replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
         titles = [
@@ -413,103 +453,108 @@ class IDScrub:
         titles += [title + "." for title in titles]
         titles += [title + ":" for title in titles]
 
-        self.logger.info("Scrubbing titles using regex...")
         pattern = r"\b(?:{})\b".format("|".join(re.escape(t) for t in titles))
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
 
-        return self.scrub_regex(pattern, replacement_text, label=label)
-
-    def ip_addresses(self, replacement_text: str = "[IPADDRESS]", label: str = "ip_address") -> list[str]:
+    def ip_addresses(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        replacement: str = "[IPADDRESS]",
+        label: str = "ip_address",
+        priority: float = 0.5,
+    ) -> list[IDEnt]:
         """
         Removes IP addresses.
         e.g. `192.168.1.1` scrubbed
 
         Args:
-            replacement_text (str): The replacement text for the removed text.
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
+            replacement (str): The replacement text for the removed text.
+            label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with IP addresses replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        self.logger.info("Scrubbing IP addresses using regex...")
         pattern = r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
 
-        return self.scrub_regex(pattern, replacement_text, label=label)
-
-    def uk_postcodes(self, replacement_text: str = "[POSTCODE]", label: str = "uk_postcode") -> list[str]:
+    def uk_postcodes(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        replacement: str = "[POSTCODE]",
+        label: str = "uk_postcode",
+        priority: float = 0.5,
+    ) -> list[IDEnt]:
         """
         Removes postcodes.
         e.g. `A11 1AA` scrubbed
 
         Args:
-            replacement_text (str): The replacement text for the removed text.
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with postcodes replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        self.logger.info("Scrubbing postcodes using regex...")
         pattern = r"\b(?:(?:[A-Z][A-HJ-Y]?[0-9][0-9A-Z]?)[ \t]*[0-9][A-Z]{2}|GIR[ \t]*0A{2}|SAN[ \t]*TA1|ASCN[ \t]*1ZZ|STHL[ \t]*1ZZ|TDCU[ \t]*1ZZ|BBND[ \t]*1ZZ|[BFS]IQ{2}[ \t]*1ZZ|GX11[ \t]*1AA|PCRN[ \t]*1ZZ|TKCA[ \t]*1ZZ|AI-?[0-9]{4}|BFPO[ \t-]?[0-9]{2,4}|MSR[ \t-]?1(?:1[12]|[23][135])0|VG[ \t-]?11[1-6]0|KY[1-3][ \t-]?[0-2][0-9]{3})\b"
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
 
-        return self.scrub_regex(pattern, replacement_text, label=label)
-
-    def uk_addresses(self, replacement_text: str = "[ADDRESS]", label: str = "uk_address") -> list[str]:
+    def uk_addresses(
+        self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        replacement: str = "[ADDRESS]",
+        label: str = "uk_address",
+        priority: float = 0.8,
+    ) -> list[IDEnt]:
         """
         Removes addresses.
         e.g. `10 Downing Street` scrubbed
 
         Args:
-            replacement_text (str): The replacement text for the removed text.
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
+
 
         Returns:
-            list[str]: The input list of text with postcodes replaced.
+            list[IDEnt]: A list of IDEnt objects.
         """
 
-        self.logger.info("Scrubbing addresses using regex...")
+        if self.texts and self.text_ids:
+            texts = self.texts
+            text_ids = self.text_ids
+        else:
+            texts = texts
+            text_ids = text_ids
+
         pattern = r"(?i)\b(?:flat\s+\w+,\s*)?\d+[a-z]?(?:[-–/]\d+[a-z]?)?\s+[a-z][a-z'’\- ]+\s+(street|st|road|rd|avenue|ave|lane|ln|close|cl|drive|dr|way|walk|gardens|gdns|place|pl|mews|court|ct|crescent|cres|terrace|ter)\b"
-
-        return self.scrub_regex(pattern, replacement_text, label)
-
-    def claimants(self, replacement_text="[CLAIMANT]", label: str = "claimant") -> list[str]:
-        """
-        Removes claimant names from employment tribunal texts.
-        e.g. `Claimant: Jim Smith` scrubbed
-
-        Args:
-            None
-        Returns:
-            list[str]: The input list of text with claimants replaced.
-        """
-
-        self.logger.info("Scrubbing claimants using regex...")
-
-        texts = self.get_texts()
-
-        claimant_name = None
-
-        cleaned_texts = []
-
-        for i, text in zip(self.text_ids, texts):
-
-            def replace_claimant(match):
-                nonlocal claimant_name
-                claimant_name = match.group(2).strip()
-                return f"{match.group(1)}[CLAIMANT] "
-
-            cleaned = re.sub(r"[\r\n]", " ", text)
-
-            cleaned = re.sub(r"(Claimant\s*:\s*)(.*?)(?=\bRespondents?\s*:)", replace_claimant, cleaned)
-
-            if claimant_name:
-                cleaned = re.sub(re.escape(claimant_name), replacement_text, cleaned)
-                self.scrubbed_data.append({self.text_id_name: i, label: claimant_name})
-
-            cleaned_texts.append(cleaned)
-
-        self.cleaned_texts = cleaned_texts
-
-        return cleaned_texts
+        return self.find_regex(
+            texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
+        )
 
     def get_spacy_model(self, model_name: str = "en_core_web_trf") -> Language:
         """
@@ -548,86 +593,68 @@ class IDScrub:
 
     def spacy_entities(
         self,
+        texts: list[str] = None,
+        text_ids: list = None,
         model_name: str = "en_core_web_trf",
-        entities: list[str] = ["PERSON", "ORG", "NORP"],
-        replacement_map: str = {"PERSON": "[PERSON]", "ORG": "[ORG]", "NORP": "[NORP]"},
-        label_prefix: str = None,
+        entity_types: list[str] = ["PERSON", "ORG", "NORP"],
+        replacement_map: dict = {"PERSON": "[PERSON]", "ORG": "[ORG]", "NORP": "[NORP]"},
+        priority: float = 1.0,
         n_process: int = 1,
         batch_size: int = 1000,
-    ) -> list[str]:
+    ) -> list[IDEnt]:
         """
-        Remove SpaCy entities using a given SpaCy model.
+        Remove SpaCy idents using a given SpaCy model.
         Documentation for entity labels: https://spacy.io/models/en#en_core_web_trf
         Note: only "en_core_web_trf" has been evaluated.
 
         Args:
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
             model_name (str): Name of Spacy model. Only `en_core_web_trf` has been evaluated.
-            entities (list[str]): Which SpaCy entities to scrub (based on SpaCy entity keys).
-            replacement_map (str): The replacement texts for the removed text. Index will match `entities`.
+            entity_types (list[str]): Which SpaCy idents to scrub (based on SpaCy entity keys).
+            replacement_map (str): The replacement texts for the removed text. Key is entity type, value is replacement.
             label_prefix (str): Prefix for the Spacy entity removed, e.g. `{label}_person`.
             n_process (int): Number of parallel processes.
             batch_size (int): The number of texts in each batch.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with PERSON entities scrubbed.
+            list[IDEnt]: A list of IDEnt objects.
         """
-
-        self.logger.info(
-            f"Scrubbing SpaCy entities `{', '.join(str(entitity) for entitity in entities)}` using SpaCy model `{model_name}`..."
-        )
-
-        texts = self.get_texts()
-
-        cleaned_texts = []
-        labels = []
 
         nlp = self.get_spacy_model(model_name)
         stripped_texts = [s.strip() if s.isspace() else s for s in texts]
-        documents = nlp.pipe(stripped_texts, n_process=n_process, batch_size=batch_size)
+        docs = nlp.pipe(stripped_texts, n_process=n_process, batch_size=batch_size)
 
-        for i, (ids, doc, stripped_text) in tqdm(
-            enumerate(zip(self.text_ids, documents, stripped_texts)), total=len(texts)
-        ):
-            if not stripped_text:
-                cleaned_texts.append(texts[i])
-                continue
+        idents = []
 
-            all_found_entities = []
-
-            for entity_type in entities:
-                found = [
-                    ent for ent in doc.ents if ent.label_ == entity_type and ent.text not in {entity_type, "HANDLE"}
-                ]
-
-                for ent in found:
-                    label = ent.label_.lower()
-                    if label_prefix:
-                        label = f"{label_prefix}_{label}"
-                    labels.append(label)
-                    self.scrubbed_data.append({self.text_id_name: ids, label: ent.text})
-
-                if self.replacement_text:
-                    all_found_entities.extend((ent.start_char, ent.end_char, self.replacement_text) for ent in found)
+        for doc, text_id in zip(docs, text_ids):
+            for ent in doc.ents:
+                if ent.label_ not in entity_types:
+                    continue
+                if self.replacement:
+                    replacement = self.replacement
                 elif replacement_map:
-                    all_found_entities.extend(
-                        (ent.start_char, ent.end_char, replacement_map.get(entity_type)) for ent in found
-                    )
+                    replacement = replacement_map.get(ent.label_, "[REDACTED]")
                 else:
-                    all_found_entities.extend((ent.start_char, ent.end_char, f"[{entity_type}]") for ent in found)
+                    replacement = f"[{ent.label_}]"
 
-            cleaned = stripped_text
+                idents.append(
+                    self.IDEnt(
+                        text_id=text_id,
+                        text=ent.text,
+                        start=ent.start_char,
+                        end=ent.end_char,
+                        priority=priority,
+                        replacement=replacement,
+                        label=ent.label_.lower(),
+                        source="spacy",
+                    )
+                )
 
-            for start, end, repl in sorted(all_found_entities, key=lambda x: x[0], reverse=True):
-                cleaned = cleaned[:start] + repl + cleaned[end:]
-
-            cleaned_texts.append(cleaned)
-
-        self.cleaned_texts = cleaned_texts
-
-        for label in set(labels):
-            self.log_message(label)
-
-        return cleaned_texts
+        return idents
 
     def get_hf_model(
         self,
@@ -666,40 +693,44 @@ class IDScrub:
 
     def huggingface_entities(
         self,
+        texts: list[str] = None,
+        text_ids: list = None,
+        entity_type="PER",
+        replacement: str = "[PERSON]",
+        label: str = "person",
+        priority: float = 1.0,
         hf_model_path: str = "dbmdz/bert-large-cased-finetuned-conll03-english",
         download_directory: str = f"{DOWNLOAD_DIR}/huggingface/",
-        entity="PER",
-        replacement_text: str = "[PERSON]",
-        label: str = "person",
-        batch_size: int = 8,
-    ) -> list[str]:
+    ) -> list[IDEnt]:
         """
-        Remove entities using a Hugging Face model. Default is a PERSON entity identifier.
+        Remove idents using a Hugging Face model. Default is a PERSON entity identifier.
         Note: No Hugging Face models have been evaluated for performance.
 
         Args:
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            entity_type (str): Which entity to scrub (based on particular model keys).
+            If None, current cleaned state of `texts` passed at Class initiation used.
             hf_model_path (str): Path to the Hugging Face model.
             Only `dbmdz/bert-large-cased-finetuned-conll03-english` has been tested.
             download_directory (str): Directory in which to save the model.
             Default is current working directory.
-            replacement_text (str): The replacement text for the removed text.
+            replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
             batch_size (int): Number of texts passed to the model in each batch.
             Memory (instance size) dependent.
 
         Returns:
-            list[str]: The input list of text with PERSON entities replaced.
+            list[str]: The input list of text with PERSON idents replaced.
 
         """
 
-        self.logger.info(f"Scrubbing names using Hugging Face model ({hf_model_path})...")
+        if self.replacement:
+            replacement = self.replacement
 
         tokenizer = self.get_hf_model(hf_model_path=hf_model_path, download_directory=download_directory)
-
-        texts = self.get_texts()
-
-        if self.replacement_text:
-            replacement_text = self.replacement_text
 
         try:
             names_model = AutoModelForTokenClassification.from_pretrained(hf_model_path)
@@ -708,73 +739,70 @@ class IDScrub:
                 f"Hugging Face model `{hf_model_path}` does has not been downloaded correctly. Please delete `huggingface/` and retry."
             )
 
-        ner_pipeline = pipeline("ner", model=names_model, tokenizer=tokenizer, aggregation_strategy="simple")
-        stripped_texts = [s.strip() if s.isspace() else s for s in texts]
-        batched_entities = ner_pipeline(stripped_texts, batch_size=batch_size)
+        ner = pipeline(task="ner", model=names_model, tokenizer=tokenizer, aggregation_strategy="simple")
 
-        cleaned_texts = []
+        idents = []
 
-        for i, (ids, stripped_text, entities) in enumerate(zip(self.text_ids, stripped_texts, batched_entities)):
-            if stripped_text == "":
-                cleaned_texts.append(texts[i])
-                continue
+        results = ner(texts)
 
-            person_entities = [
-                ent for ent in entities if ent["entity_group"] == entity and ent["word"] not in {"HANDLE", entity}
-            ]
-            self.scrubbed_data.extend({self.text_id_name: ids, label: ent["word"]} for ent in person_entities)
+        for ents, text_id in zip(results, text_ids):
+            for ent in ents:
+                if ent["entity_group"] != entity_type:
+                    continue
+                idents.append(
+                    self.IDEnt(
+                        text_id=text_id,
+                        text=ent["word"],
+                        start=ent["start"],
+                        end=ent["end"],
+                        priority=priority,
+                        replacement=replacement,
+                        label=label,
+                        source="huggingface",
+                    )
+                )
 
-            cleaned = stripped_text
-            for ent in sorted(person_entities, key=lambda x: x["start"], reverse=True):
-                cleaned = cleaned[: ent["start"]] + replacement_text + cleaned[ent["end"] :]
-
-            cleaned_texts.append(cleaned)
-
-        self.cleaned_texts = cleaned_texts
-
-        self.log_message(label)
-
-        return cleaned_texts
+        return idents
 
     def presidio_entities(
         self,
+        texts: list[str] = None,
+        text_ids: list = None,
         model_name: str = "en_core_web_trf",
-        entities: list[str] = [
+        entity_types: list[str] = [
             "PERSON",
+            "EMAIL_ADDRESS",
             "UK_NINO",
             "UK_NHS",
             "CREDIT_CARD",
             "CRYPTO",
             "MEDICAL_LICENSE",
-            "URL",
+            "SWIFT_CODE",
             "IBAN_CODE",
+            "LOCATION",
+            "NRP",
         ],
-        replacement_map: str = None,
-        label_prefix: str = None,
-    ) -> list[str]:
+        replacement_map: dict = {},
+        priority: float = 1.0,
+    ) -> list[IDEnt]:
         """
-        Scrub specified entities from texts using Presidio.
+        Scrub specified idents from texts using Presidio.
 
         See https://microsoft.github.io/presidio/supported_entities/ for further detail.
 
         Args:
+            texts (list[str]): Strings to scrub.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            If None, current cleaned state of `texts` passed at Class initiation used.
             model_name (str): spaCy model to use
-            entities (list[str]): Entity types to scrub (e.g. ["PERSON", "IP_ADDRESS"])
-            replacement_map (dict): Mapping of entity_type to replacement string (e.g. {'PERSON': '[PERSON]'})
-            label_prefix (str): Prefix for the Presidio personal data type removed, e.g. `{label}_person`.
-            Useful if you wish to identify this having being scrubbed by Presidio.
+            entity_types (list[str]): entity types to scrub (e.g. ["PERSON", "IP_ADDRESS"])
+            replacement_map (str): The replacement texts for the removed text. Key is entity type, value is replacement.
+            priority (float): Priority score for personal data match (range 0 - 1).
+            Higher scored matches are scrubbed when overlapping personal data found.
 
         Returns:
-            list[str]: The input list of text with entities replaced.
+            list[str]: The input list of text with idents replaced.
         """
-
-        self.logger.info(
-            f"Scrubbing Presidio entities `{', '.join(str(entitity) for entitity in entities)}` using SpaCy model `{model_name}`..."
-        )
-
-        texts = self.get_texts()
-
-        cleaned_texts = []
 
         class LoadedSpacyNlpEngine(SpacyNlpEngine):
             def __init__(self, loaded_spacy_model):
@@ -785,199 +813,308 @@ class IDScrub:
         loaded_nlp_engine = LoadedSpacyNlpEngine(loaded_spacy_model=nlp)
 
         analyzer = AnalyzerEngine(nlp_engine=loaded_nlp_engine)
-        anonymizer = AnonymizerEngine()
 
-        cleaned_texts = []
-        all_labels = []
+        idents = []
 
-        stripped_texts = [s.strip() if s.isspace() else s for s in texts]
+        for text, text_id in zip(texts, text_ids):
+            results = analyzer.analyze(text=text, language="en", entities=entity_types)
+            for res in results:
+                if res.entity_type not in entity_types:
+                    continue
 
-        for i, (ids, stripped_text) in tqdm(enumerate(zip(self.text_ids, stripped_texts)), total=len(texts)):
-            if stripped_text == "":
-                cleaned_texts.append(texts[i])
-                continue
+                if self.replacement:
+                    replacement = self.replacement
+                elif replacement_map:
+                    replacement = replacement_map.get(res.entity_type, "[REDACTED]")
+                else:
+                    replacement = f"[{res.entity_type}]"
 
-            results = analyzer.analyze(text=stripped_text, language="en")
-            results = [r for r in results if r.entity_type in entities]
+                idents.append(
+                    self.IDEnt(
+                        text_id=text_id,
+                        text=text[res.start : res.end],
+                        start=res.start,
+                        end=res.end,
+                        priority=priority,
+                        replacement=replacement,
+                        label=res.entity_type.lower(),
+                        source="presidio",
+                    )
+                )
 
-            if label_prefix:
-                labels = [f"{label_prefix}_{res.entity_type.lower()}" for res in results]
-            else:
-                labels = [f"{res.entity_type.lower()}" for res in results]
+        return idents
 
-            for label in labels:
-                all_labels.append(label)
-
-            self.scrubbed_data.extend(
-                {self.text_id_name: ids, label: stripped_text[res.start : res.end]}
-                for res, label in zip(results, labels)
-            )
-
-            if self.replacement_text:
-                operators = {
-                    res.entity_type: OperatorConfig("replace", {"new_value": self.replacement_text}) for res in results
-                }
-            elif replacement_map:
-                operators = {
-                    res.entity_type: OperatorConfig("replace", {"new_value": replacement_map.get(res.entity_type)})
-                    for res in results
-                }
-            else:
-                operators = {
-                    res.entity_type: OperatorConfig("replace", {"new_value": f"[{res.entity_type}]"}) for res in results
-                }
-
-            anonymized = anonymizer.anonymize(text=stripped_text, analyzer_results=results, operators=operators)
-
-            cleaned_texts.append(anonymized.text)
-
-        self.cleaned_texts = cleaned_texts
-
-        for label in set(all_labels):
-            self.log_message(label)
-
-        return cleaned_texts
-
-    def all_regex(self) -> list[str]:
+    def group_idents(self, idents: list[IDEnt]) -> dict[int | str | float, list[IDEnt]]:
         """
-        Use all regex methods to remove personal information from text.
+        Group a list of IDEnt objects by `text_id`.
+
+        Each unique `text_id` becomes a dictionary key,
+        and its value is a list of all IDEnt objects associated with that ID.
 
         Args:
-            None
+            idents (list[IDEnt]) A list of IDEnt objects.
 
         Returns:
-            list[str]: The input list of text with various personal information replaced.
-
+            dict[int | str | float, list[IDEnt]]: A dictionary mapping each text_id to a list of IDEnt objects.
         """
 
-        self.email_addresses()
-        self.handles()
-        self.ip_addresses()
-        self.uk_phone_numbers()
-        self.uk_addresses()
-        self.uk_postcodes()
-        self.titles()
+        idents_grouped = defaultdict(list)
 
-        return self.cleaned_texts
+        for ident in idents:
+            idents_grouped[ident.text_id].append(ident)
 
-    def all(
+        return idents_grouped
+
+    def resolve_overlaps(self, idents: list[IDEnt]) -> list[IDEnt]:
+        """
+        Select the highest-scoring non-overlapping idents.
+
+        Resolves conflicts between idents that overlap in their
+        character ranges. Entities are first sorted by descending priority and then by
+        start position to ensure a priority order.
+
+        Each IDEnt is accepted only if it does not overlap with any IDEnt
+        already selected. The resulting set of idents is returned in ascending
+        document order.
+
+        A IDEnt is considered overlapping if:
+            IDEnt.start <= other.end  and  IDEnt.end >= other.start
+
+        Args:
+            idents (list[IDEnt]) A list of IDEnt objects.
+
+        Returns:
+            list[IDEnt]: A list of non-overlapping idents, sorted by their start position.
+        """
+
+        idents_grouped = self.group_idents(idents)
+
+        resolved = []
+
+        for text_id, idents in idents_grouped.items():
+            if not idents:
+                return []
+
+            idents_by_score = sorted(idents, key=lambda ident: (-ident.priority, ident.start))
+
+            kept_idents = []
+
+            for current_ident in idents_by_score:
+                has_overlap = any(
+                    current_ident.start <= existing_ident.end and current_ident.end >= existing_ident.start
+                    for existing_ident in kept_idents
+                )
+
+                if not has_overlap:
+                    kept_idents.append(current_ident)
+
+            resolved.extend(kept_idents)
+
+        return resolved
+
+    def scrub_text(self, texts: str = None, text_ids: list = None, idents: list[IDEnt] = None):
+        """
+        Apply a set of non-overlapping replacement idents to a text.
+
+        Each IDEnt specifies a character range to replace (`IDEnt.start` to `IDEnt.end`)
+        and a `replacement` string that will be inserted in place of that range.
+
+        Args:
+            texts list[str]: The original input text with overlaps resolved.
+            text_ids (list): A list of identifiers that correspond to each string in `texts`.
+            idents list[IDEnt]: a list of IDEnt objects. Must be non-overlapping.
+            See `resolve_conflicts`.
+
+        Return:
+            str: A scrubbed string with all replacements applied.
+        """
+
+        if texts is None:
+            texts = getattr(self, "texts", None)
+        if text_ids is None:
+            text_ids = getattr(self, "text_ids", None)
+        if idents is None:
+            idents = getattr(self, "idents", None)
+
+        if texts is None or text_ids is None or idents is None:
+            raise ValueError("texts, text_ids, and idents must be provided or set on self.")
+
+        if len(texts) != len(text_ids):
+            raise ValueError("texts and text_ids must be the same length.")
+
+        scrubbed_texts = list(texts)
+        idents_grouped = self.group_idents(idents)
+
+        for i, text_id in enumerate(text_ids):
+            text = texts[i]
+
+            group = idents_grouped.get(text_id, [])
+            sorted_group = sorted(group, key=lambda ident: ident.start, reverse=True)
+
+            for ident in sorted_group:
+                text = text[: ident.start] + ident.replacement + text[ident.end :]
+
+            scrubbed_texts[i] = text
+
+        return scrubbed_texts
+
+    def scrub(
         self,
-        custom_regex_patterns: list = None,
-        custom_replacement_texts: list[str] = None,
-        model_name: str = "en_core_web_trf",
-        spacy_entities: list[str] = ["PERSON", "ORG", "NORP"],
-        presidio_entities: list[str] = [
-            "PERSON",
-            "EMAIL_ADDRESS",
-            "UK_NINO",
-            "UK_NHS",
-            "CREDIT_CARD",
-            "CRYPTO",
-            "MEDICAL_LICENSE",
-            "URL",
-            "SWIFT_CODE",
-            "IBAN_CODE",
-            "LOCATION",
-            "NRP",
+        pipeline: list[dict] = [
+            {"method": "presidio_entities"},
+            {"method": "spacy_entities"},
+            {"method": "email_addresses"},
+            {"method": "handles"},
+            {"method": "ip_addresses"},
+            {"method": "uk_addresses"},
+            {"method": "uk_phone_numbers"},
+            {"method": "google_phone_numbers"},
+            {"method": "uk_postcodes"},
+            {"method": "urls"},
+            {"method": "titles"},
         ],
-        n_process: int = 1,
-        batch_size: int = 1000,
-    ) -> list[str]:
+    ):
         """
-        Use all regex and NER (Spacy) methods to remove personal information from text.
-
-        Args:
-            custom_regex_patterns list[str]: Regex(s) pattern to apply.
-            custom_replacement_texts list[str]: The replacement texts for the removed text. Defaults to '[REDACTED]' for all.
-            model_name (str): Name of Spacy model. Only `en_core_web_trf` has been evaluated.
-            n_process (str): Number of parallel processes.
-            batch_size (int): The number of texts in each batch.
-
-        Returns:
-            list[str]: The input list of text with various personal information replaced.
-        """
-
-        if custom_regex_patterns:
-            self.custom_regex(
-                custom_regex_patterns=custom_regex_patterns,
-                custom_replacement_texts=custom_replacement_texts,
-            )
-
-        self.presidio_entities(model_name=model_name, entities=presidio_entities)
-        self.spacy_entities(model_name=model_name, entities=spacy_entities, n_process=n_process, batch_size=batch_size)
-        self.google_phone_numbers()
-        self.all_regex()
-
-        return self.cleaned_texts
-
-    def scrub(self, scrub_methods: list[str] = ["all"]) -> list[str]:
-        """
-        Scrubs text using given methods (in order).
+        Scrubs text using given methods.
         Uses default values for the given scrub method.
 
-        Methods available (see associated method docstring for further information):
-
-        "all", "spacy_persons", "huggingface_persons", "email_addresses", "handles",
-        "ip_addresses", "uk_phone_numbers", "google_phone_numbers", "uk_postcodes"
-        "titles", "presidio"
-
-        Example:
-
-        "email_addresses" = scrub.email_addresses()
-
-        Therefore we can call:
-
-        IDScrub.scrub(scrub_methods = ["email_addresses"])
-
         Args:
-            scrub_method (str): string name of scrub method.
+            pipeline (list[dict]): Scrub methods and their method parameters to apply.
+            Methods are specified with "method" key.
+            Parameters are specified with argument name as "key" and argument value as value.
+
+            Example: IDScrub.scrub(pipeline=[{"method": "google_phone_numbers", "region": "GB"}])
+
+            Methods available (see associated method docstring for further parameters):
+            "spacy_entities", "huggingface_entities", "email_addresses", "handles",
+            "ip_addresses", "uk_addresses", "uk_phone_numbers", "google_phone_numbers", "uk_postcodes"
+            "titles", "presidio_entities"
 
         Returns:
-            list[str]: The input list of text with personal information replaced.
+            list[str]: The input texts scrubbed of personal data.
 
         """
 
-        for scrub_method in scrub_methods:
+        if not isinstance(pipeline, list):
+            raise TypeError("Argument `pipeline` must be a list of dicts.")
+
+        self.idents_all = []
+        self.idents = []
+
+        for step in pipeline:
+            scrub_method = step["method"]
+            args = {k: v for k, v in step.items() if k != "method"}
+
+            if args:
+                self.logger.info(f"Scrubbing using {scrub_method} with parameters {args}...")
+            else:
+                self.logger.info(f"Scrubbing using {scrub_method} with default parameters...")
+
             try:
                 method = getattr(self, scrub_method)
-                method()
             except AttributeError:
                 self.logger.warning("Not a scrub method.")
 
-        return self.cleaned_texts
+            self.idents_all.extend(method(texts=self.texts, text_ids=self.text_ids, **args))
+
+        idents_resolved = self.resolve_overlaps(self.idents_all)
+        self.idents.extend(idents_resolved)
+        self.scrubbed_texts = self.scrub_text(self.texts, self.text_ids, self.idents)
+
+        return self.scrubbed_texts
+
+    def get_all_identified_data(self) -> pd.DataFrame:
+        """
+        Get all of the identified data before overlaps have been resolved.
+
+        Each row is a identified entity. Columns are the IDEnt attributes.
+
+        Args:
+            None
+        Return:
+            pd.DataFrame: All identified data and their attributes.
+        """
+        all_idents = pd.DataFrame([asdict(ident) for ident in self.idents_all])
+        return all_idents
+
+    def get_scrubbed_data(self) -> pd.DataFrame:
+        """
+        Create a DataFrame summarising scrubbed text idents grouped by text ID and label.
+
+        Each row corresponds to a unique `text_id`, and each column represents a IDEnt label.
+        The cell values are lists of the IDEnt text values associated with that label for the given text ID.
+        Args:
+            None
+        Return:
+            pd.DataFrame: All data scrubbed from text.
+        """
+        data = defaultdict(lambda: defaultdict(list))
+
+        for ident in self.idents:
+            data[ident.text_id][ident.label].append(ident.text)
+
+        df = pd.DataFrame.from_dict(data, orient="index")
+        df = df.reset_index().rename(columns={"index": self.text_id_name})
+        df = df.where(pd.notna(df), None)
+
+        return df
 
     @staticmethod
     def dataframe(
         df: pd.DataFrame = None,
         id_col: str = None,
         exclude_cols: list = None,
-        scrub_methods: list[str] = ["all"],
+        pipeline: list[dict] = [
+            {"method": "presidio_entities"},
+            {"method": "spacy_entities"},
+            {"method": "email_addresses"},
+            {"method": "handles"},
+            {"method": "ip_addresses"},
+            {"method": "uk_addresses"},
+            {"method": "uk_phone_numbers"},
+            {"method": "google_phone_numbers"},
+            {"method": "uk_postcodes"},
+            {"method": "urls"},
+            {"method": "titles"},
+        ],
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Scrubs all personal data from a Pandas Dataframe.
 
         Args:
             df (pd.DataFrame): A Pandas dataframe to scrub.
-            id_col (str): Name of the ID column in `df`. If None, an integer index starting at 1  with the name `id` is applied.
+            id_col (str): Name of the ID column in `df`. If None, an integer index starting at 1  with the name `text_id` is applied.
             exclude_cols (list): Columns to exclude from scrubbing. if None all columns are scrubbed.
-            scrub_methods (list[str]): Which scrub methods to apply to the DataFrame (in order).
-            These are string versions of the existing methods e.g. "all" == scrub.all() and "email_addresses" == scrub.email_addresses().
+            pipeline (list[dict]): Scrub methods and their method parameters to apply.
+            Methods are specified with "method" key.
+            Parameters are specified with argument name as "key" and argument value as value.
+
+            Example: IDScrub.scrub(pipeline=[{"method": "google_phone_numbers", "region": "GB"}])
+
+            Methods available (see associated method docstring for further parameters):
+            "spacy_entities", "huggingface_entities", "email_addresses", "handles",
+            "ip_addresses", "uk_addresses", "uk_phone_numbers", "google_phone_numbers", "uk_postcodes"
+            "titles", "presidio_entities"
 
         Returns:
             tuple[pd.DataFrame, pd.DataFrame]: The input dataframe with all personal data removed and a dataframe with the personal data that has been removed.
 
         """
 
-        assert id_col in df.columns, "`id_col` is not a column in `df`. Please check."
+        if not isinstance(df, pd.DataFrame):
+            raise TypeError("`df` must be a Pandas DataFrame.")
 
-        if id_col:
-            ids = df[id_col].to_list()
-        if not id_col:
-            id_col = "id"
+        if id_col is None:
             ids = range(1, len(df) + 1)
+            id_col = "id"
+        else:
+            if id_col not in df.columns:
+                raise ValueError(f"`id_col` '{id_col}' is not a column in df.")
 
-        assert isinstance(df, pd.DataFrame), "`df` must be a Pandas DataFrame."
-        assert len(df) == len(ids), "Length of dataframe is different to the length of IDs."
+            ids = df[id_col].tolist()
+
+        if not len(df) == len(ids):
+            raise ValueError("Length of dataframe is different to the length of IDs.")
 
         if exclude_cols is None:
             cols_to_scrub = df.columns.to_list()
@@ -994,16 +1131,17 @@ class IDScrub:
             original_dtype = scrubbed_df[col].dtype
             scrubbed_df[col] = scrubbed_df[col].astype(str)
 
-            scrub = IDScrub(texts=scrubbed_df[col].to_list(), text_id_name=id_col, text_ids=ids)
+            scrub = IDScrub(texts=scrubbed_df[col].to_list(), text_ids=ids)
             scrub.logger.info(f"Scrubbing column `{col}`...")
 
-            scrubbed_texts = scrub.scrub(scrub_methods)
+            scrubbed_texts = scrub.scrub(pipeline=pipeline)
             scrubbed_df[col] = scrubbed_texts
 
             scrubbed_data = scrub.get_scrubbed_data()
 
             if scrubbed_data is not None:
                 scrubbed_data.insert(1, "column", col)
+                scrubbed_data.rename(columns={"text_id": id_col}, inplace=True)
                 all_scrubbed_data.append(scrubbed_data)
 
             try:
@@ -1013,8 +1151,14 @@ class IDScrub:
                 pass
 
         all_scrubbed_data = pd.concat(all_scrubbed_data).reset_index(drop=True)
+        all_scrubbed_data["column"] = pd.Categorical(
+            all_scrubbed_data["column"], categories=cols_to_scrub, ordered=True
+        )
+        all_scrubbed_data = all_scrubbed_data.sort_values(by=["column", id_col]).reset_index(drop=True)
+        all_scrubbed_data["column"] = all_scrubbed_data["column"].astype(str)
         all_scrubbed_data = all_scrubbed_data.where(pd.notna(all_scrubbed_data), None)
 
-        assert df.shape == scrubbed_df.shape, "Original and scrubbed dataframe not the same shape. Check."
+        if not df.shape == scrubbed_df.shape:
+            raise ValueError("Original and scrubbed dataframe not the same shape. Check input DataFrame.")
 
         return scrubbed_df, all_scrubbed_data

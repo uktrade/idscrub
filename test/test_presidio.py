@@ -8,20 +8,27 @@ def test_presidio():
     scrub = IDScrub(
         ["Our names are Hamish McDonald, L. Salah, and Elena Suárez.", "My IBAN code is GB91BKEN10000041610008."]
     )
-    scrubbed_texts = scrub.presidio_entities(entities=["PERSON", "IBAN_CODE"])
+    scrubbed = scrub.scrub(pipeline=[{"method": "presidio_entities"}])
 
-    assert scrubbed_texts == ["Our names are [PERSON], [PERSON], and [PERSON].", "My IBAN code is [IBAN_CODE]."]
+    assert scrubbed == ["Our names are [PERSON], [PERSON], and [PERSON].", "My IBAN code is [IBAN_CODE]."]
 
 
 def test_presidio_map():
     scrub = IDScrub(
         ["Our names are Hamish McDonald, L. Salah, and Elena Suárez.", "My IBAN code is GB91BKEN10000041610008."]
     )
-    scrubbed_texts = scrub.presidio_entities(
-        entities=["PERSON", "IBAN_CODE"], replacement_map={"PERSON": "[PHELLO]", "IBAN_CODE": "[IHELLO]"}
+
+    scrubbed = scrub.scrub(
+        pipeline=[
+            {
+                "method": "presidio_entities",
+                "entity_types": ["PERSON", "IBAN_CODE"],
+                "replacement_map": {"PERSON": "[PHELLO]", "IBAN_CODE": "[IHELLO]"},
+            }
+        ]
     )
 
-    assert scrubbed_texts == ["Our names are [PHELLO], [PHELLO], and [PHELLO].", "My IBAN code is [IHELLO]."]
+    assert scrubbed == ["Our names are [PHELLO], [PHELLO], and [PHELLO].", "My IBAN code is [IHELLO]."]
 
 
 def test_presidio_get_data():
@@ -29,7 +36,7 @@ def test_presidio_get_data():
         ["Our names are Hamish McDonald, L. Salah, and Elena Suárez.", "My IBAN code is GB91BKEN10000041610008."]
     )
 
-    scrub.presidio_entities(entities=["PERSON", "IBAN_CODE"])
+    scrub.scrub(pipeline=[{"method": "presidio_entities"}])
 
     df = scrub.get_scrubbed_data()
 

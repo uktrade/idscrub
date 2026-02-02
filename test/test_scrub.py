@@ -3,9 +3,10 @@ from idscrub import IDScrub
 from pandas.testing import assert_frame_equal
 
 
-# Note: These tests will fail if the kernel has not been restarted since the SpaCy model was downloaded.
 def test_scrub(scrub_object):
-    scrubbed = scrub_object.scrub(scrub_methods=["spacy_entities", "uk_phone_numbers", "uk_postcodes"])
+    scrubbed = scrub_object.scrub(
+        pipeline=[{"method": "spacy_entities"}, {"method": "uk_phone_numbers"}, {"method": "uk_postcodes"}]
+    )
     assert scrubbed == [
         "Our names are [PERSON], [PERSON], and [PERSON].",
         "My number is [PHONENO] and I live at [POSTCODE].",
@@ -15,7 +16,7 @@ def test_scrub(scrub_object):
 def test_scrub_text_id():
     scrub = IDScrub(["Our names are Hamish McDonald, L. Salah, and Elena Suárez."] * 10)
 
-    scrub.scrub(scrub_methods=["spacy_entities"])
+    scrub.scrub(pipeline=[{"method": "spacy_entities"}])
 
     df = scrub.get_scrubbed_data()
 
@@ -24,7 +25,7 @@ def test_scrub_text_id():
 
 
 def test_scrub_get_scrubbed_data(scrub_object):
-    scrub_object.scrub(scrub_methods=["uk_postcodes"])
+    scrub_object.scrub(pipeline=[{"method": "uk_postcodes"}])
     df = scrub_object.get_scrubbed_data()
 
     expected_df = pd.DataFrame(
@@ -37,12 +38,21 @@ def test_scrub_get_scrubbed_data(scrub_object):
     assert_frame_equal(df, expected_df)
 
 
-def test_scrub_order(scrub_object):
-    scrub_object.scrub(scrub_methods=["uk_postcodes", "uk_phone_numbers", "spacy_entities"])
+def test_scrub_get_all_identified_data(scrub_object):
+    scrub_object.scrub(pipeline=[{"method": "uk_postcodes"}])
+    df = scrub_object.get_all_identified_data()
 
-    assert scrub_object.get_scrubbed_data().columns.to_list() == [
-        "text_id",
-        "uk_postcode",
-        "uk_phone_number",
-        "person",
-    ]
+    expected_df = pd.DataFrame(
+        {
+            "text_id": {0: 2},
+            "text": {0: "AA11 1AA"},
+            "start": {0: 41},
+            "end": {0: 49},
+            "label": {0: "uk_postcode"},
+            "replacement": {0: "[POSTCODE]"},
+            "priority": {0: 0.5},
+            "source": {0: "regex"},
+        }
+    )
+
+    assert_frame_equal(df, expected_df)
