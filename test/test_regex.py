@@ -92,12 +92,16 @@ def test_uk_addresses():
             "10 St John’s Rd",
             "33 Queen-Anne Walk",
             "8 Deansgate Ct",
+            "10 Downing Street",
+            "10, Downing Street",
         ],
     )
 
     scrubbed = scrub.scrub(pipeline=[{"method": "uk_addresses"}])
 
     assert scrubbed == [
+        "[ADDRESS]",
+        "[ADDRESS]",
         "[ADDRESS]",
         "[ADDRESS]",
         "[ADDRESS]",

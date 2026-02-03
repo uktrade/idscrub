@@ -44,7 +44,9 @@ class IDScrub:
             end (int): The ending character offset of the ident within the original text.
             label (str): The ident type (e.g. 'person').
             replacement (str): The text that should replace this ident during scrubbing.
-            priority (float): A priority score for overlapping entitities.
+            priority (float): Priority score for overlapping idents.
+            Higher scored idents are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
             source (str): The source model or method that identified the ident.
         """
 
@@ -137,8 +139,9 @@ class IDScrub:
             pattern (str): Regex pattern to apply.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -218,8 +221,7 @@ class IDScrub:
         priority: float = 0.7,
     ) -> list[IDEnt]:
         """
-        Remove email addresses using regex.
-        e.g. `johnsmith@mail.com` scrubbed
+        Remove email addresses using regex e.g. `johnsmith@mail.com` identified.
 
         Args:
             texts (list[str]): Strings to scrub.
@@ -227,8 +229,9 @@ class IDScrub:
             If None, current cleaned state of `texts` passed at Class initiation used.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -248,8 +251,7 @@ class IDScrub:
         priority: float = 0.3,
     ) -> list[IDEnt]:
         """
-        Remove `http`, `https` and `www` URLs using regex
-        e.g. `www.google.com` scrubbed.
+        Remove `http`, `https` and `www` URLs using regex e.g. `www.google.com` identified.
 
         `example.com` will not be scrubbed by this method.
 
@@ -259,8 +261,9 @@ class IDScrub:
             If None, current cleaned state of `texts` passed at Class initiation used.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -280,8 +283,7 @@ class IDScrub:
         priority: float = 0.4,
     ) -> list[IDEnt]:
         """
-        Remove `@` user handles using regex
-        e.g. `@username` scrubbed
+        Remove `@` user handles using regex e.g. `@username` identified.
 
         Args:
             texts (list[str]): Strings to scrub.
@@ -289,8 +291,9 @@ class IDScrub:
             If None, current cleaned state of `texts` passed at Class initiation used.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -311,8 +314,7 @@ class IDScrub:
         priority: float = 0.8,
     ) -> list[IDEnt]:
         """
-        Remove phone numbers using Google's `phonenumbers`.
-        e.g. `+441234567891` scrubbed
+        Remove phone numbers using Google's `phonenumbers` e.g. `+441234567891` identified.
 
         Args:
             texts (list[str]): Strings to scrub.
@@ -321,8 +323,9 @@ class IDScrub:
             region (str): The region to find phone numbers for. See `phonenumbers` regions.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -360,16 +363,16 @@ class IDScrub:
         priority: float = 0.8,
     ) -> list[IDEnt]:
         """
-        Remove phone numbers using regex.
-        e.g. `+441234567891` scrubbed
+        Remove phone numbers using regex e.g. `+441234567891` identified.
 
         Args:
             texts (list[str]): Strings to scrub.
             If None, current cleaned state of `text` passed at Class initiation used.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -400,8 +403,9 @@ class IDScrub:
             If strict, you may find scrubbing of common words, such as general.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -470,8 +474,7 @@ class IDScrub:
         priority: float = 0.5,
     ) -> list[IDEnt]:
         """
-        Removes IP addresses.
-        e.g. `192.168.1.1` scrubbed
+        Removes IP addresses e.g. `192.168.1.1` identified.
 
         Args:
             texts (list[str]): Strings to scrub.
@@ -479,8 +482,9 @@ class IDScrub:
             If None, current cleaned state of `texts` passed at Class initiation used.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -500,8 +504,7 @@ class IDScrub:
         priority: float = 0.5,
     ) -> list[IDEnt]:
         """
-        Removes postcodes.
-        e.g. `A11 1AA` scrubbed
+        Removes postcodes e.g. `A11 1AA` identified.
 
         Args:
             texts (list[str]): Strings to scrub.
@@ -509,8 +512,9 @@ class IDScrub:
             If None, current cleaned state of `texts` passed at Class initiation used.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -531,7 +535,7 @@ class IDScrub:
     ) -> list[IDEnt]:
         """
         Removes addresses.
-        e.g. `10 Downing Street` scrubbed
+        e.g. `10 Downing Street` and `10, Downing Street` identified.
 
         Args:
             texts (list[str]): Strings to scrub.
@@ -539,8 +543,9 @@ class IDScrub:
             If None, current cleaned state of `texts` passed at Class initiation used.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
 
         Returns:
@@ -554,7 +559,7 @@ class IDScrub:
             texts = texts
             text_ids = text_ids
 
-        pattern = r"(?i)\b(?:flat\s+\w+,\s*)?\d+[a-z]?(?:[-–/]\d+[a-z]?)?\s+[a-z][a-z'’\- ]+\s+(street|st|road|rd|avenue|ave|lane|ln|close|cl|drive|dr|way|walk|gardens|gdns|place|pl|mews|court|ct|crescent|cres|terrace|ter)\b"
+        pattern = r"(?i)\b(?:flat\s+\w+,\s*)?\d+[a-z]?(?:[-–/]\d+[a-z]?)?,?\s+[a-z][a-z'’\- ]+\s+(street|st|road|rd|avenue|ave|lane|ln|close|cl|drive|dr|way|walk|gardens|gdns|place|pl|mews|court|ct|crescent|cres|terrace|ter)\b"
         return self.find_regex(
             texts=texts, text_ids=text_ids, pattern=pattern, label=label, replacement=replacement, priority=priority
         )
@@ -620,8 +625,9 @@ class IDScrub:
             label_prefix (str): Prefix for the Spacy entity removed, e.g. `{label}_person`.
             n_process (int): Number of parallel processes.
             batch_size (int): The number of texts in each batch.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[IDEnt]: A list of IDEnt objects.
@@ -720,8 +726,9 @@ class IDScrub:
             Default is current working directory.
             replacement (str): The replacement text for the removed text.
             label (str): Label for the personal data removed.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
             batch_size (int): Number of texts passed to the model in each batch.
             Memory (instance size) dependent.
 
@@ -800,8 +807,9 @@ class IDScrub:
             model_name (str): spaCy model to use
             entity_types (list[str]): entity types to scrub (e.g. ["PERSON", "IP_ADDRESS"])
             replacement_map (str): The replacement texts for the removed text. Key is entity type, value is replacement.
-            priority (float): Priority score for personal data match (range 0 - 1).
-            Higher scored matches are scrubbed when overlapping personal data found.
+            priority (float): Priority score for overlapping entities.
+            Higher scored entities are scrubbed where an overlap occurs.
+            The scores are relative e.g. 0.2 beats 0.1.
 
         Returns:
             list[str]: The input list of text with idents replaced.
@@ -986,12 +994,18 @@ class IDScrub:
             Methods are specified with "method" key.
             Parameters are specified with argument name as "key" and argument value as value.
 
-            Example: IDScrub.scrub(pipeline=[{"method": "google_phone_numbers", "region": "GB"}])
+            Example: IDScrub.scrub(pipeline=[{"method": "spacy_entities", "entity_types": ["PERSON"])
 
-            Methods available (see associated method docstring for further parameters):
+            See associated method docstring for further parameters e.g. ?IDScrub.spacy_entities.
+
+            Methods available:
+
             "spacy_entities", "huggingface_entities", "email_addresses", "handles",
             "ip_addresses", "uk_addresses", "uk_phone_numbers", "google_phone_numbers", "uk_postcodes"
             "titles", "presidio_entities"
+
+            Each method takes a `priority` argument. Higher priority scored entities
+            are scrubbed where an overlap occurs. The scores are relative.
 
         Returns:
             list[str]: The input texts scrubbed of personal data.
@@ -1091,14 +1105,19 @@ class IDScrub:
             exclude_cols (list): Columns to exclude from scrubbing. if None all columns are scrubbed.
             pipeline (list[dict]): Scrub methods and their method parameters to apply.
             Methods are specified with "method" key.
-            Parameters are specified with argument name as "key" and argument value as value.
 
-            Example: IDScrub.scrub(pipeline=[{"method": "google_phone_numbers", "region": "GB"}])
+            Example: IDScrub.scrub(pipeline=[{"method": "spacy_entities", "entity_types": ["PERSON"])
 
-            Methods available (see associated method docstring for further parameters):
+            See associated method docstring for further parameters e.g. ?IDScrub.spacy_entities.
+
+            Methods available:
+
             "spacy_entities", "huggingface_entities", "email_addresses", "handles",
             "ip_addresses", "uk_addresses", "uk_phone_numbers", "google_phone_numbers", "uk_postcodes"
             "titles", "presidio_entities"
+
+            Each method takes a `priority` argument. Higher priority scored entities
+            are scrubbed where an overlap occurs. The scores are relative.
 
         Returns:
             tuple[pd.DataFrame, pd.DataFrame]: The input dataframe with all personal data removed and a dataframe with the personal data that has been removed.
