@@ -49,3 +49,11 @@ def test_presidio_get_data():
     )
 
     assert_frame_equal(df, expected_df)
+
+
+def test_presidio_empty():
+    scrub = IDScrub([" ", "  John Smith", ""])
+    scrubbed = scrub.scrub(pipeline=[{"method": "presidio_entities", "entity_types": ["PERSON"]}])
+
+    assert scrubbed == [" ", "  [PERSON]", ""]
+    assert_frame_equal(scrub.get_scrubbed_data(), pd.DataFrame({"text_id": 2, "person": [["John Smith"]]}))
