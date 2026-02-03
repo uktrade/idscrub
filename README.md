@@ -48,7 +48,6 @@ print(scrubbed_texts)
 
 This package will identify and scrub many types of data that you might not want to scrub, such as locations or context-relevent names. **We therefore highly recommend manually removing scrubbed data identified by `idscrub` from your original dataset on a case-by-case basis.**
 
-
 Scrubbed data can be identified using the following methods (see the [usage example notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/basic_usage.ipynb) for further information):
 
 ```python
@@ -82,9 +81,7 @@ print(scrubbed_df)
 
 ## Personal data types supported
 
-Personal data can either be scrubbed as methods with arguments for extra customisation, e.g. `IDScrub.google_phone_numbers(region="GB")`, or as a string arguments with default configurations (see above). The method name and its string representation are the same. 
-
-| Argument                | Scrubs                                                                 |
+| Method                | Scrubs                                                                 |
 |-------------------------|------------------------------------------------------------------------|
 | `all`                  | All supported personal data types (see `IDScrub.all()` for further customisation) |
 | `spacy_entities`        | Entities detected by spaCy's `en_core_web_trf` or other user-selected spaCy models (e.g. persons (names), organisations) |
@@ -99,6 +96,8 @@ Personal data can either be scrubbed as methods with arguments for extra customi
 | `uk_addresses`         | UK addresses (e.g. 10 Downing Street)  |
 | `uk_phone_numbers`     | UK phone numbers (e.g. +441111111111) |
 | `google_phone_numbers` | Phone numbers detected by Google's [phonenumbers](https://github.com/daviddrysdale/python-phonenumbers) |
+
+Method arguments for further customisation can be viewed by viewing the docstring e.g. `?IDScrub.spacy_entities`.
 
 ## Considerations before use
 
