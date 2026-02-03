@@ -18,10 +18,10 @@ def test_spacy_error():
 
 
 def test_spacy_empty():
-    scrub = IDScrub([" ", "John Smith", ""])
+    scrub = IDScrub([" ", "  John Smith", ""])
     scrubbed = scrub.scrub(pipeline=[{"method": "spacy_entities"}])
 
-    assert scrubbed == [" ", "[PERSON]", ""]
+    assert scrubbed == [" ", "  [PERSON]", ""]
     assert_frame_equal(scrub.get_scrubbed_data(), pd.DataFrame({"text_id": 2, "person": [["John Smith"]]}))
 
 

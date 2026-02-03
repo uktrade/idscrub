@@ -634,7 +634,7 @@ class IDScrub:
         """
 
         nlp = self.get_spacy_model(model_name)
-        stripped_texts = [s.strip() if s.isspace() else s for s in texts]
+        stripped_texts = ["" if s.strip() == "" else s for s in texts]
         docs = nlp.pipe(stripped_texts, n_process=n_process, batch_size=batch_size)
 
         idents = []
@@ -825,9 +825,11 @@ class IDScrub:
 
         analyzer = AnalyzerEngine(nlp_engine=loaded_nlp_engine)
 
+        stripped_texts = ["" if s.strip() == "" else s for s in texts]
+
         idents = []
 
-        for text, text_id in zip(texts, text_ids):
+        for text, text_id in zip(stripped_texts, text_ids):
             results = analyzer.analyze(text=text, language="en", entities=entity_types)
             for res in results:
                 if res.entity_type not in entity_types:
