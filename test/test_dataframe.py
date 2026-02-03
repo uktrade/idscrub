@@ -20,7 +20,7 @@ def test_dataframe_outputs():
         }
     )
 
-    scrubbed_df, scrubbed_data = IDScrub.dataframe(df=df, id_col="ID", scrub_methods=["all"])
+    scrubbed_df, scrubbed_data = IDScrub.dataframe(df=df, id_col="ID")
 
     expected_scrubbed_df = pd.DataFrame(
         {
@@ -43,7 +43,6 @@ def test_dataframe_outputs():
             "person": [["Darcy", "Elizabeth"], ["Bennet"], None, ["Mick Jagger", "David Bowie"]],
             "title": [["Mr"], ["Mr"], None, None],
             "email_address": [None, None, ["freddie-mercury@queen.com"], None],
-            "url": [None, None, ["queen.com"], None],
             "uk_postcode": [None, None, ["SW1A 2AA"], ["SW1A 2WH"]],
         }
     )
@@ -67,9 +66,7 @@ def test_dataframe_exclude():
         }
     )
 
-    scrubbed_df, scrubbed_data = IDScrub.dataframe(
-        df=df, id_col="ID", exclude_cols=["Fake book"], scrub_methods=["all"]
-    )
+    scrubbed_df, scrubbed_data = IDScrub.dataframe(df=df, id_col="ID", exclude_cols=["Fake book"])
 
     expected_scrubbed_df = pd.DataFrame(
         {
@@ -113,7 +110,7 @@ def test_dataframe_scrub_methods():
         }
     )
 
-    scrubbed_df, scrubbed_data = IDScrub.dataframe(df=df, id_col="ID", scrub_methods=["titles"])
+    scrubbed_df, scrubbed_data = IDScrub.dataframe(df=df, id_col="ID", pipeline=[{"method": "titles"}])
 
     expected_scrubbed_df = pd.DataFrame(
         {
@@ -141,7 +138,7 @@ def test_dataframe_scrub_methods():
     assert_frame_equal(scrubbed_data, expected_scrubbed_data)
 
 
-def test_dataframe_id_col():
+def test_dataframe_errors():
     df = pd.DataFrame(
         {
             "ID": [1, 2],
@@ -156,5 +153,8 @@ def test_dataframe_id_col():
         }
     )
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         IDScrub.dataframe(df=df, id_col="ID_not_present")
+
+    with pytest.raises(TypeError):
+        IDScrub.dataframe(df=1, id_col="ID_not_present")
