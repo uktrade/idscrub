@@ -79,6 +79,12 @@ scrubbed_df, scrubbed_data = IDScrub.dataframe(
 print(scrubbed_df)
 ```
 
+Method key-value pairs for further customisation, e.g. `"entity_types"`, can be viewed by viewing the docstring e.g. `?IDScrub.spacy_entities`. 
+
+Key-value pairs represent method arguments:
+
+`IDScrub.spacy_entities(entity_types=["PERSON"])` is equivalent to `pipeline=[{"method": "spacy_entities", "entity_types": ["PERSON"]}]`.
+
 ## Personal data types supported
 
 | Method                | Scrubs                                                                 |
@@ -96,6 +102,9 @@ print(scrubbed_df)
 | `uk_addresses`         | UK addresses (e.g. 10 Downing Street)  |
 | `uk_phone_numbers`     | UK phone numbers (e.g. +441111111111) |
 | `google_phone_numbers` | Phone numbers detected by Google's [phonenumbers](https://github.com/daviddrysdale/python-phonenumbers) |
+
+> [!IMPORTANT]
+> If you wish to scrub something not included in this list or contribute another method to the codebase, see the [custom methods notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/custom_methods.ipynb) for guidance and examples. 
 
 Method arguments for further customisation can be viewed by viewing the docstring e.g. `?IDScrub.spacy_entities`.
 
