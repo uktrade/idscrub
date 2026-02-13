@@ -47,8 +47,8 @@ print(scrubbed_texts)
 ```
 
 > [!IMPORTANT]
-> This package will identify and scrub many types of data that you might not want to scrub, such as context-relevant, fictional or organisational names. 
-> We therefore recommend manually removing scrubbed data identified by `idscrub` from your original dataset on a case-by-case basis.
+> * This package will identify and scrub many types of data that you might not want to scrub, such as context-relevant, fictional or organisational names. 
+> * We therefore recommend manually removing scrubbed data identified by `idscrub` from your original dataset on a case-by-case basis.
 
 Scrubbed data can be identified using the following methods (see the [usage example notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/basic_usage.ipynb) for further information):
 
