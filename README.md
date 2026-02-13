@@ -108,8 +108,6 @@ Key-value pairs represent method arguments:
 > [!IMPORTANT]
 > If you wish to scrub something not included in this list or contribute another method to the codebase, see the [custom methods notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/custom_methods.ipynb) for guidance and examples. 
 
-Method arguments for further customisation can be viewed by viewing the docstring e.g. `?IDScrub.spacy_entities`.
-
 ## Considerations before use
 
 - You must follow [GDPR guidance](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/the-research-provisions/principles-and-grounds-for-processing/) when processing personal data using this package.
