@@ -46,7 +46,9 @@ print(scrubbed_texts)
 # Output: ['Our names are [PERSON], [PERSON], and [PERSON].', 'My number is [PHONENO] and I live at [POSTCODE].']
 ```
 
-This package will identify and scrub many types of data that you might not want to scrub, such as locations or context-relevent names. **We therefore highly recommend manually removing scrubbed data identified by `idscrub` from your original dataset on a case-by-case basis.**
+> [!IMPORTANT]
+> * This package will identify and scrub many types of data that you might not want to scrub, such as context-relevant, fictional or organisational names. 
+> * We therefore recommend manually removing scrubbed data identified by `idscrub` from your original dataset on a case-by-case basis.
 
 Scrubbed data can be identified using the following methods (see the [usage example notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/basic_usage.ipynb) for further information):
 
@@ -79,6 +81,12 @@ scrubbed_df, scrubbed_data = IDScrub.dataframe(
 print(scrubbed_df)
 ```
 
+Method key-value pairs for further customisation, e.g. `"entity_types"`, can be viewed by viewing the docstring e.g. `?IDScrub.spacy_entities`. 
+
+Key-value pairs represent method arguments:
+
+`IDScrub.spacy_entities(entity_types=["PERSON"])` is equivalent to `pipeline=[{"method": "spacy_entities", "entity_types": ["PERSON"]}]`.
+
 ## Personal data types supported
 
 | Method                | Scrubs                                                                 |
@@ -97,7 +105,8 @@ print(scrubbed_df)
 | `uk_phone_numbers`     | UK phone numbers (e.g. +441111111111) |
 | `google_phone_numbers` | Phone numbers detected by Google's [phonenumbers](https://github.com/daviddrysdale/python-phonenumbers) |
 
-Method arguments for further customisation can be viewed by viewing the docstring e.g. `?IDScrub.spacy_entities`.
+> [!IMPORTANT]
+> If you wish to scrub something not included in this list or contribute another method to the codebase, see the [custom methods notebook](https://github.com/uktrade/idscrub/blob/main/notebooks/custom_methods.ipynb) for guidance and examples. 
 
 ## Considerations before use
 
