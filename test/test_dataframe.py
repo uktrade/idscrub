@@ -158,3 +158,17 @@ def test_dataframe_errors():
 
     with pytest.raises(TypeError):
         IDScrub.dataframe(df=1, id_col="ID_not_present")
+
+
+def test_dataframe_defaults_and_kwargs():
+
+    df = pd.DataFrame({"data": ["My postcode is SW1A 2AA", "My postcode is SW1A 2AA"]})
+
+    pipeline = [{"method": "uk_postcodes"}]
+
+    scrubbed_df, scrubbed_data = IDScrub.dataframe(df=df, pipeline=pipeline, replacement="[TEST]")
+
+    assert scrubbed_df["data"].to_list() == ["My postcode is [TEST]", "My postcode is [TEST]"]
+    assert scrubbed_df.columns.to_list() == ["data"]
+    assert scrubbed_data["uk_postcode"].to_list() == [["SW1A 2AA"], ["SW1A 2AA"]]
+    assert scrubbed_data["row_id"].to_list() == [1, 2]

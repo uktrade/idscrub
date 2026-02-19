@@ -1097,16 +1097,19 @@ class IDScrub:
             {"method": "urls"},
             {"method": "titles"},
         ],
+        **kwargs: any,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Scrubs all personal data from a Pandas Dataframe.
 
         Args:
             df (pd.DataFrame): A Pandas dataframe to scrub.
-            id_col (str): Name of the ID column in `df`. If None, an integer index starting at 1  with the name `text_id` is applied.
+            id_col (str): Name of the ID column in `df`.
+            If None, a col called `row_id` starting at 1 is used to identify the row in which data was scrubbed.
             exclude_cols (list): Columns to exclude from scrubbing. if None all columns are scrubbed.
             pipeline (list[dict]): Scrub methods and their method parameters to apply.
             Methods are specified with "method" key.
+            Parameters are specified with argument name as the key and argument value as the value.
 
             Example: IDScrub.scrub(pipeline=[{"method": "spacy_entities", "entity_types": ["PERSON"])
 
@@ -1121,6 +1124,8 @@ class IDScrub:
             Each method takes a `priority` argument. Higher priority scored entities
             are scrubbed where an overlap occurs. The scores are relative.
 
+            **kwargs (any): other keyword arguments passed to IDScrub().
+
         Returns:
             tuple[pd.DataFrame, pd.DataFrame]: The input dataframe with all personal data removed and a dataframe with the personal data that has been removed.
 
@@ -1131,7 +1136,7 @@ class IDScrub:
 
         if id_col is None:
             ids = range(1, len(df) + 1)
-            id_col = "id"
+            id_col = "row_id"
         else:
             if id_col not in df.columns:
                 raise ValueError(f"`id_col` '{id_col}' is not a column in df.")
@@ -1146,7 +1151,8 @@ class IDScrub:
         else:
             cols_to_scrub = [col for col in df.columns if col not in exclude_cols]
 
-        cols_to_scrub.remove(id_col)
+        if id_col in cols_to_scrub:
+            cols_to_scrub.remove(id_col)
 
         scrubbed_df = df.copy()
 
@@ -1156,7 +1162,7 @@ class IDScrub:
             original_dtype = scrubbed_df[col].dtype
             scrubbed_df[col] = scrubbed_df[col].astype(str)
 
-            scrub = IDScrub(texts=scrubbed_df[col].to_list(), text_ids=ids)
+            scrub = IDScrub(texts=scrubbed_df[col].to_list(), text_ids=ids, **kwargs)
             scrub.logger.info(f"Scrubbing column `{col}`...")
 
             scrubbed_texts = scrub.scrub(pipeline=pipeline)
