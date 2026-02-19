@@ -1105,7 +1105,7 @@ class IDScrub:
         Args:
             df (pd.DataFrame): A Pandas dataframe to scrub.
             id_col (str): Name of the ID column in `df`.
-            If None, an integer index starting at 1 called `row_id` is used to identify the scrubbed data row.
+            If None, a col called `row_id` starting at 1 is used to identify the row in which data was scrubbed.
             exclude_cols (list): Columns to exclude from scrubbing. if None all columns are scrubbed.
             pipeline (list[dict]): Scrub methods and their method parameters to apply.
             Methods are specified with "method" key.
