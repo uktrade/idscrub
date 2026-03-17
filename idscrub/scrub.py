@@ -1160,7 +1160,7 @@ class IDScrub:
 
         for col in tqdm(cols_to_scrub):
             original_dtype = scrubbed_df[col].dtype
-            scrubbed_df[col] = scrubbed_df[col].astype(str)
+            scrubbed_df[col] = scrubbed_df[col].astype("string")
 
             scrub = IDScrub(texts=scrubbed_df[col].to_list(), text_ids=ids, **kwargs)
             scrub.logger.info(f"Scrubbing column `{col}`...")
