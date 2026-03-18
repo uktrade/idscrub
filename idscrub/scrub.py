@@ -5,6 +5,7 @@ import warnings
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
+from typing import Any
 
 import pandas as pd
 import phonenumbers
@@ -1097,7 +1098,7 @@ class IDScrub:
             {"method": "urls"},
             {"method": "titles"},
         ],
-        **kwargs: any,
+        **kwargs: Any,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Scrubs all personal data from a Pandas Dataframe.

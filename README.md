@@ -78,7 +78,7 @@ scrubbed_df, scrubbed_data = IDScrub.dataframe(
         {"method": "uk_postcodes"},
     ]
 )
-print(scrubbed_df)
+print(scrubbed_data)
 ```
 
 Method key-value pairs for further customisation, e.g. `"entity_types"`, can be viewed by viewing the docstring e.g. `?IDScrub.spacy_entities`. 
