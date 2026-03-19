@@ -39,10 +39,10 @@ def test_spacy_map():
     assert scrubbed == ["Our names are [PHELLO], [PHELLO], and [PHELLO].", "My company code is [SPACE]."]
 
 
-def test_presidio_get_data():
+def test_spacy_get_data():
     scrub = IDScrub(["Our names are Hamish McDonald, L. Salah, and Elena Suárez.", "My company code is NASA."])
 
-    scrub.scrub(pipeline=[{"method": "spacy_entities"}])
+    scrub.scrub(pipeline=[{"method": "spacy_entities", "entity_types": ["PERSON", "ORG"]}])
 
     df = scrub.get_scrubbed_data()
 
