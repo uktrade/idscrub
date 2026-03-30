@@ -57,3 +57,15 @@ def test_presidio_empty():
 
     assert scrubbed == [" ", "  [PERSON]", ""]
     assert_frame_equal(scrub.get_scrubbed_data(), pd.DataFrame({"text_id": 2, "person": [["John Smith"]]}))
+
+
+def test_presidio_nino():
+    scrub = IDScrub(["BJ 60 64 44 C", "BJ606444C", "BJ-60-64-44-C", "BJ 606444 C", "And 00 00 00 John Doe"])
+    scrubbed = scrub.scrub(pipeline=[{"method": "presidio_entities", "entity_types": ["UK_NINO"]}])
+    assert scrubbed == ["[UK_NINO]", "[UK_NINO]", "BJ-60-64-44-C", "[UK_NINO]", "And 00 00 00 John Doe" ]
+
+
+def test_presidio_nhs():
+    scrub = IDScrub(["049 228 2277", " 049 228 2277", "0492282277", "049-228-2277", "01 352 715 623"])
+    scrubbed = scrub.scrub(pipeline=[{"method": "presidio_entities", "entity_types": ["UK_NHS"]}])
+    assert scrubbed == ['[UK_NHS]', ' [UK_NHS]', '[UK_NHS]', '[UK_NHS]', '01 352 715 623']

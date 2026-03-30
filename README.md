@@ -93,7 +93,7 @@ Key-value pairs represent method arguments:
 |-------------------------|------------------------------------------------------------------------|
 | `all`                  | All supported personal data types (see `IDScrub.all()` for further customisation) |
 | `spacy_entities`        | Entities detected by spaCy's `en_core_web_trf` or other user-selected spaCy models (e.g. persons (names), organisations) |
-| `presidio_entities`     | Entities supported by [Microsoft Presidio](https://microsoft.github.io/presidio/) (e.g. persons (names), URLs, NHS numbers, IBAN codes) |
+| `presidio_entities`     | Entities supported by [Microsoft Presidio](https://microsoft.github.io/presidio/) (e.g. persons (names), URLs, NHS numbers, NINO, IBAN codes) |
 | `huggingface_entities`  | Entities detected by user-selected HuggingFace models |
 | `email_addresses`      | Email addresses (e.g. john@email.com)   |
 | `titles`               | Titles (e.g. Mr., Mrs., Dr.)    |
