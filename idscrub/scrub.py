@@ -13,6 +13,7 @@ import spacy
 from huggingface_hub.utils import HFValidationError
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import SpacyNlpEngine
+from presidio_analyzer.predefined_recognizers import NhsRecognizer, UkNinoRecognizer
 from spacy.cli import download
 from spacy.language import Language
 from tqdm import tqdm
@@ -777,8 +778,8 @@ class IDScrub:
 
     def presidio_entities(
         self,
-        texts: list[str] = None,
-        text_ids: list = None,
+        texts: list[str] | None = None,
+        text_ids: list | None = None,
         model_name: str = "en_core_web_trf",
         entity_types: list[str] = [
             "PERSON",
@@ -826,7 +827,15 @@ class IDScrub:
 
         analyzer = AnalyzerEngine(nlp_engine=loaded_nlp_engine)
 
-        stripped_texts = ["" if s.strip() == "" else s for s in texts]
+        if "UK_NINO" in entity_types:
+            analyzer.registry.add_recognizer(UkNinoRecognizer())
+        if "UK_NHS" in entity_types:
+            analyzer.registry.add_recognizer(NhsRecognizer())
+
+        if texts is not None:
+            stripped_texts = ["" if s.strip() == "" else s for s in texts]
+        else:
+            stripped_texts = []
 
         idents = []
 
