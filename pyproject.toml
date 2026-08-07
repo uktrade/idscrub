@@ -30,7 +30,7 @@ en_core_web_trf = { url = "https://github.com/explosion/spacy-models/releases/do
 
 [dependency-groups]
 dev = [
-    "pytest",
+    "pytest==9.0.3",
     "pytest-cov",
     "ruff",
     "pre-commit",
