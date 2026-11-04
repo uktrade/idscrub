@@ -20,6 +20,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "presidio-analyzer",
     "presidio-anonymizer",
+    "certifi>2026.10.19",
 ]
 
 [project.optional-dependencies]
